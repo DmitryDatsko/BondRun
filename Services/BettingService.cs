@@ -31,7 +31,7 @@ public class BettingService : BackgroundService
             if (elapsed != lastSentTime)
             {
                 lastSentTime = elapsed;
-                await _hub.Clients.All.SendAsync("Timer", elapsed, cancellationToken: cancellationToken);
+                await _hub.Clients.All.SendAsync(methodName, elapsed, cancellationToken: cancellationToken);
             }
         }
 
