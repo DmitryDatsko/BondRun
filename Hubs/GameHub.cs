@@ -11,7 +11,14 @@ public sealed class GameHub : Hub
     private readonly BettingService _bettingService;
 
     public GameHub(BettingService bettingService) => _bettingService = bettingService;
-    
+
+    public override async Task OnConnectedAsync()
+    {
+        await Clients.Caller.SendAsync("OnConnected");
+        
+        await base.OnConnectedAsync();
+    }
+
     public async Task PlaceBet(decimal amount, string side)
     {
         if (!_bettingService.IsBettingOpen)
