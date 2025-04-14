@@ -17,7 +17,7 @@ public class BettingService : BackgroundService
         _hub = hub;
         _cryptoPriceService = cryptoPriceService;
     }
-    private async Task RunCountdownAsync(double totalSeconds = 15, CancellationToken cancellationToken = default)
+    private async Task RunCountdownAsync(double totalSeconds, string methodName, CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
         double lastSentTime = -1;
@@ -35,7 +35,7 @@ public class BettingService : BackgroundService
             }
         }
 
-        await _hub.Clients.All.SendAsync("Timer", totalSeconds, cancellationToken: cancellationToken);
+        await _hub.Clients.All.SendAsync(methodName, totalSeconds, cancellationToken: cancellationToken);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -49,8 +49,7 @@ public class BettingService : BackgroundService
                 lock (_lock) { IsBettingOpen = true; }
 
                 await _hub.Clients.All.SendAsync("BettingStarted", cancellationToken: stoppingToken);
-                await RunCountdownAsync(cancellationToken: stoppingToken);
-                //await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
+                await RunCountdownAsync(15, "BetTimer", cancellationToken: stoppingToken);
                 
                 lock (_lock) { IsBettingOpen = false; }
 
@@ -60,7 +59,7 @@ public class BettingService : BackgroundService
 
                 var bets = GameHub.GetAllBetsAndClear();
 
-                await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+                await RunCountdownAsync(totalSeconds:10, "GameTimer", cancellationToken: stoppingToken);
                 
                 var endPriceSnapshot = _cryptoPriceService.Price;
 
