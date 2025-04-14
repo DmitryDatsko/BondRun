@@ -49,7 +49,7 @@ public class CryptoPriceService : BackgroundService
                     {
                         var price = json["data"]?["lastPrice"]?.ToString();
                         Price = decimal.TryParse(price, CultureInfo.InvariantCulture, out var p) ? p : 0;
-                        //await _hub.Clients.All.SendAsync("NewPrice", price, cancellationToken: stoppingToken);
+                        await _hub.Clients.All.SendAsync("NewPrice", price, cancellationToken: stoppingToken);
                     }
                 }
 
