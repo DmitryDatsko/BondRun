@@ -11,7 +11,7 @@ public class CryptoPriceService : BackgroundService
 {
     private readonly IHubContext<GameHub> _hub;
     private readonly ClientWebSocket _client = new();
-    private static readonly Uri _uri = new("wss://stream.bybit.com/v5/public/spot");
+    private static readonly Uri Uri = new("wss://stream.bybit.com/v5/public/spot");
     private const string Topic = "tickers.BTCUSDT";
 
     public decimal Price { get; private set; }
@@ -22,7 +22,7 @@ public class CryptoPriceService : BackgroundService
     {
         try
         {
-            await _client.ConnectAsync(_uri, stoppingToken);
+            await _client.ConnectAsync(Uri, stoppingToken);
 
             string subscribeMessage = @"{
                 ""op"": ""subscribe"",

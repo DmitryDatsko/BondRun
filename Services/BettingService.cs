@@ -1,4 +1,5 @@
-﻿using BondRun.Hubs;
+﻿using System.Diagnostics;
+using BondRun.Hubs;
 using Microsoft.AspNetCore.SignalR;
 
 namespace BondRun.Services;
@@ -16,6 +17,26 @@ public class BettingService : BackgroundService
         _hub = hub;
         _cryptoPriceService = cryptoPriceService;
     }
+    private async Task RunCountdownAsync(double totalSeconds = 15, CancellationToken cancellationToken = default)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        double lastSentTime = -1;
+
+        while (stopwatch.Elapsed.TotalSeconds < totalSeconds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            double elapsed = Math.Round(stopwatch.Elapsed.TotalSeconds, 2);
+
+            if (elapsed != lastSentTime)
+            {
+                lastSentTime = elapsed;
+                await _hub.Clients.All.SendAsync("Timer", elapsed, cancellationToken: cancellationToken);
+            }
+        }
+
+        await _hub.Clients.All.SendAsync("Timer", totalSeconds, cancellationToken: cancellationToken);
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -28,8 +49,9 @@ public class BettingService : BackgroundService
                 lock (_lock) { IsBettingOpen = true; }
 
                 await _hub.Clients.All.SendAsync("BettingStarted", cancellationToken: stoppingToken);
-                await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
-
+                await RunCountdownAsync(cancellationToken: stoppingToken);
+                //await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
+                
                 lock (_lock) { IsBettingOpen = false; }
 
                 await _hub.Clients.All.SendAsync("BettingEnded", cancellationToken: stoppingToken);
