@@ -19,9 +19,8 @@ public class BettingService : BackgroundService
         _hub = hub;
         _cryptoPriceService = cryptoPriceService;
     }
-    private async Task RunCountdownAsync(double totalSeconds, string methodName, CancellationToken cancellationToken = default)
+    private async Task RunCountdownAsync(Stopwatch stopwatch, double totalSeconds, string methodName, CancellationToken cancellationToken = default)
     {
-        var stopwatch = Stopwatch.StartNew();
         double lastSentTime = -1;
 
         while (stopwatch.Elapsed.TotalSeconds < totalSeconds)
@@ -35,11 +34,12 @@ public class BettingService : BackgroundService
                 lastSentTime = elapsed;
                 await _hub.Clients.All.SendAsync(methodName, elapsed, cancellationToken: cancellationToken);
             }
+
+            await Task.Delay(50, cancellationToken); // чуть разгрузим цикл
         }
 
         await _hub.Clients.All.SendAsync(methodName, totalSeconds, cancellationToken: cancellationToken);
     }
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var timer = new PeriodicTimer(_interval);
@@ -50,7 +50,9 @@ public class BettingService : BackgroundService
             {
                 lock (_lock) { IsBettingOpen = true; }
                 await _hub.Clients.All.SendAsync("BettingStarted", cancellationToken: stoppingToken);
-                await RunCountdownAsync(15, "BetTimer", cancellationToken: stoppingToken);
+                
+                var betStopwatch = Stopwatch.StartNew();
+                await RunCountdownAsync(betStopwatch, 15, "BetTimer", cancellationToken: stoppingToken);
 
                 lock (_lock) { IsBettingOpen = false; }
                 await _hub.Clients.All.SendAsync("BettingEnded", cancellationToken: stoppingToken);
@@ -63,7 +65,8 @@ public class BettingService : BackgroundService
                 
                 var gameStopwatch = Stopwatch.StartNew();
                 var gameDuration = TimeSpan.FromSeconds(20);
-                await RunCountdownAsync(20, "GameTimer", stoppingToken);
+                
+                var timerTask = RunCountdownAsync(gameStopwatch, gameDuration.TotalSeconds, "GameTimer", stoppingToken);
 
                 while (gameStopwatch.Elapsed < gameDuration)
                 {
@@ -85,6 +88,8 @@ public class BettingService : BackgroundService
 
                     await Task.Delay(100, stoppingToken);
                 }
+
+                await timerTask;
 
                 var endPriceSnapshot = _cryptoPriceService.Price;
                 bool isLong = endPriceSnapshot > startPriceSnapshot;
