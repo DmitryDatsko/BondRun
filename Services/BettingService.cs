@@ -11,7 +11,7 @@ public class BettingService : BackgroundService
     private readonly TimeSpan _interval = TimeSpan.FromSeconds(35);
     private readonly object _lock = new();
     private readonly List<decimal> _priceHistory = new();
-    private const int MovementMultiplier = 70000;
+    private const int MovementMultiplier = 140_000;
     public bool IsBettingOpen { get; private set; }
 
     public BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoPriceService)
