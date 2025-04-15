@@ -60,9 +60,10 @@ public class BettingService : BackgroundService
                 _priceHistory.Add(startPriceSnapshot);
 
                 var bets = GameHub.GetAllBetsAndClear();
-
+                
                 var gameStopwatch = Stopwatch.StartNew();
                 var gameDuration = TimeSpan.FromSeconds(20);
+                await RunCountdownAsync(20, "GameTimer", stoppingToken);
 
                 while (gameStopwatch.Elapsed < gameDuration)
                 {
