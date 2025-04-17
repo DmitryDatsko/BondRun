@@ -7,15 +7,22 @@ using Newtonsoft.Json.Linq;
 
 namespace BondRun.Services;
 
-public class CryptoPriceService : BackgroundService
+public class CryptoPriceService(IHubContext<GameHub> hub) : BackgroundService
 {
-    private readonly IHubContext<GameHub> _hub;
     private readonly ClientWebSocket _client = new();
     private static readonly Uri Uri = new("wss://stream.bybit.com/v5/public/spot");
     private const string Topic = "tickers.BTCUSDT";
-    public decimal Price { get; private set; }
-    
-    public CryptoPriceService(IHubContext<GameHub> hub) => _hub = hub;
+    private decimal _price;
+    public decimal Price
+    {
+        get => _price;
+        private set
+        {
+            _price = value;
+            OnPriceChanged?.Invoke(this, value);
+        }
+    }
+    public event EventHandler<decimal>? OnPriceChanged;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -54,7 +61,7 @@ public class CryptoPriceService : BackgroundService
                             if (decimal.TryParse(closePrice, CultureInfo.InvariantCulture, out var price))
                             {
                                 Price = price;
-                                await _hub.Clients.All.SendAsync("NewPrice", price, cancellationToken: stoppingToken);
+                                await hub.Clients.All.SendAsync("NewPrice", price, cancellationToken: stoppingToken);
                             }
                         }
                     }
