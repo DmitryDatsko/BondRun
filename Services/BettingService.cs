@@ -70,13 +70,20 @@ public class BettingService : BackgroundService
                 
                 var gameStopwatch = Stopwatch.StartNew();
                 var gameDuration = TimeSpan.FromSeconds(10);
-                var scale = 5.0;
-                var maxTimeOffset = 100.0;
+                var tickInterval = TimeSpan.FromMilliseconds(100);
 
-                var lastSentPrice = _cryptoPriceService.Price;
-                var priceDriftSpeed = 0.3;
-                var priceChangeBoost = 2.0;
-                var fakeProgress = 0.0;
+                var startPrice = _cryptoPriceService.Price;
+                var lastPrice = startPrice;
+                var priceCheckInterval = TimeSpan.FromMilliseconds(500);
+                var nextPriceCheck = DateTime.UtcNow + priceCheckInterval;
+
+                double longY = 120, shortY = 120;
+                double longSpeed = 0, shortSpeed = 0;
+                double longTargetSpeed = 0, shortTargetSpeed = 0;
+
+                var baseSpeed = 5.0;
+                var speedMultiplier = 20.0;
+                var smoothness = 0.1;
 
                 var timerTask = RunCountdownAsync(gameStopwatch, gameDuration.TotalSeconds, "GameTimer", stoppingToken);
 
@@ -84,40 +91,41 @@ public class BettingService : BackgroundService
                 {
                     stoppingToken.ThrowIfCancellationRequested();
 
-                    var currentPrice = _cryptoPriceService.Price;
-                    var priceDelta = currentPrice - startPriceSnapshot;
-
-                    var elapsedMs = gameStopwatch.Elapsed.TotalMilliseconds;
-                    var progress = Math.Min(elapsedMs / gameDuration.TotalMilliseconds, 1.0);
-
-                    var baseOffset = progress * maxTimeOffset;
-                    var priceOffset = (double)priceDelta * scale;
+                    var currentTime = DateTime.UtcNow;
                     
-                    bool priceChanged = currentPrice != lastSentPrice;
+                    var currentPrice = _cryptoPriceService.Price;
 
-                    if (priceChanged)
+                    _priceHistory.Add(currentPrice);
+
+                    if (currentTime >= nextPriceCheck)
                     {
-                        fakeProgress += priceChangeBoost;
-                        lastSentPrice = currentPrice;
-                        _priceHistory.Add(currentPrice);
-                    }
-                    else
-                    {
-                        fakeProgress += priceDriftSpeed;
+                        var priceDelta = currentPrice - startPrice;
+
+                        longTargetSpeed = baseSpeed + (double)priceDelta * speedMultiplier;
+                        shortTargetSpeed = baseSpeed - (double)priceDelta * speedMultiplier;
+
+                        longTargetSpeed = Math.Clamp(longTargetSpeed, 2.0, 20.0);
+                        shortTargetSpeed = Math.Clamp(shortTargetSpeed, 2.0, 20.0);
+
+                        lastPrice = currentPrice;
+                        nextPriceCheck = currentTime + priceCheckInterval;
                     }
 
-                    var longY = 120 - (baseOffset + priceOffset + fakeProgress);
-                    var shortY = 120 + (baseOffset - priceOffset + fakeProgress);
+                    longSpeed += (longTargetSpeed - longSpeed) * smoothness;
+                    shortSpeed += (shortTargetSpeed - shortSpeed) * smoothness;
 
-                    longY = Math.Max(10, Math.Min(230, longY));
-                    shortY = Math.Max(10, Math.Min(230, shortY));
+                    longY -= longSpeed * tickInterval.TotalSeconds;
+                    shortY += shortSpeed * tickInterval.TotalSeconds;
+
+                    longY = Math.Clamp(longY, 10, 230);
+                    shortY = Math.Clamp(shortY, 10, 230);
 
                     await _hub.Clients.All.SendAsync("RaceTick", new {
                         LongY = longY,
                         ShortY = shortY
                     }, cancellationToken: stoppingToken);
 
-                    await Task.Delay(100, stoppingToken);
+                    await Task.Delay(tickInterval, stoppingToken);
                 }
 
                 await timerTask;
