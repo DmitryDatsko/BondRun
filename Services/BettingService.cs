@@ -62,11 +62,11 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
         {
             if(_prices[^1] - _prices[^2] >= 0)
             {
-                _pixels["longY"] += 2.5m;
+                _pixels["longY"] += 10;
             }
             else
             {
-                _pixels["shortY"] += 2.5m;
+                _pixels["shortY"] += 10;
             }
 
             await hub.Clients.All.SendAsync("RaceTick", new
@@ -108,15 +108,24 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
                 
                 cryptoPriceService.OnPriceChanged += HandlePriceChanged;
                 
+                var frameInterval = TimeSpan.FromMilliseconds(150);
                 while (gameStopwatch.Elapsed < gameDuration)
                 {
                     stoppingToken.ThrowIfCancellationRequested();
-
+                    
                     _pixels["longY"] += 0.15m;
                     _pixels["shortY"] += 0.15m;
+                    
+                    await hub.Clients.All.SendAsync("RaceTick", new
+                    {
+                        LongY = _pixels["longY"],
+                        ShortY = _pixels["shortY"]
+                    }, stoppingToken);
+                    
+                    await Task.Delay(frameInterval, stoppingToken);
                 }
                 
-                cryptoPriceService.OnPriceChanged += HandlePriceChanged;
+                cryptoPriceService.OnPriceChanged -= HandlePriceChanged;
                 await timerTask;
                 
                 string gameResult = _prices[^1] > _prices[0] ? "long" : "short";
