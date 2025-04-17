@@ -13,7 +13,6 @@ public class BettingService : BackgroundService
     private readonly List<decimal> _priceHistory = new();
     private const int MovementMultiplier = 500_000;
     public bool IsBettingOpen { get; private set; }
-
     public BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoPriceService)
     {
         _hub = hub;
@@ -72,7 +71,14 @@ public class BettingService : BackgroundService
                 
                 var gameStopwatch = Stopwatch.StartNew();
                 var gameDuration = TimeSpan.FromSeconds(10);
-                
+                var scale = 5.0;
+                var maxTimeOffset = 100.0;
+
+                var lastSentPrice = _cryptoPriceService.Price;
+                var priceDriftSpeed = 0.3; // шаг, когда цена не меняется
+                var priceChangeBoost = 2.0; // множитель, когда цена изменилась
+                var fakeProgress = 0.0;
+
                 var timerTask = RunCountdownAsync(gameStopwatch, gameDuration.TotalSeconds, "GameTimer", stoppingToken);
 
                 while (gameStopwatch.Elapsed < gameDuration)
@@ -80,24 +86,44 @@ public class BettingService : BackgroundService
                     stoppingToken.ThrowIfCancellationRequested();
 
                     var currentPrice = _cryptoPriceService.Price;
-                    var lastPrice = _priceHistory.Last();
+                    var priceDelta = currentPrice - startPriceSnapshot;
 
-                    if (currentPrice != lastPrice)
+                    var elapsedMs = gameStopwatch.Elapsed.TotalMilliseconds;
+                    var progress = Math.Min(elapsedMs / gameDuration.TotalMilliseconds, 1.0);
+
+                    var baseOffset = progress * maxTimeOffset;
+                    var priceOffset = (double)priceDelta * scale;
+
+                    // тут мы дёргаем движение даже если цена не изменилась
+                    bool priceChanged = currentPrice != lastSentPrice;
+
+                    if (priceChanged)
                     {
+                        fakeProgress += priceChangeBoost; // ускоряем
+                        lastSentPrice = currentPrice;
                         _priceHistory.Add(currentPrice);
-
-                        var delta = (double)(currentPrice - lastPrice) / (double)startPriceSnapshot;
-                        var signedLog = Math.Sign(delta) * Math.Log(1 + Math.Abs(delta));
-                        var movement = signedLog * MovementMultiplier;
-
-                        await _hub.Clients.All.SendAsync("RaceTick", movement, cancellationToken: stoppingToken);
+                    }
+                    else
+                    {
+                        fakeProgress += priceDriftSpeed; // медленный сдвиг
                     }
 
-                    //await Task.Delay(100, stoppingToken);
+                    var longY = 120 - (baseOffset + priceOffset + fakeProgress);
+                    var shortY = 120 + (baseOffset - priceOffset + fakeProgress);
+
+                    longY = Math.Max(10, Math.Min(230, longY));
+                    shortY = Math.Max(10, Math.Min(230, shortY));
+
+                    await _hub.Clients.All.SendAsync("RaceTick", new {
+                        LongY = longY,
+                        ShortY = shortY
+                    }, cancellationToken: stoppingToken);
+
+                    await Task.Delay(100, stoppingToken);
                 }
 
                 await timerTask;
-
+                
                 var endPriceSnapshot = _cryptoPriceService.Price;
                 bool isLong = endPriceSnapshot > startPriceSnapshot;
                 string result = isLong ? "long" : "short";
