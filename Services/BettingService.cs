@@ -62,11 +62,11 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
         {
             if(_prices[^1] - _prices[^2] >= 0)
             {
-                _pixels["longY"] += 10;
+                _pixels["longY"] += 2.5m;
             }
             else
             {
-                _pixels["shortY"] += 10;
+                _pixels["shortY"] += 2.5m;
             }
 
             await hub.Clients.All.SendAsync("RaceTick", new
@@ -111,6 +111,9 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
                 while (gameStopwatch.Elapsed < gameDuration)
                 {
                     stoppingToken.ThrowIfCancellationRequested();
+
+                    _pixels["longY"] += 0.15m;
+                    _pixels["shortY"] += 0.15m;
                 }
                 
                 cryptoPriceService.OnPriceChanged += HandlePriceChanged;
@@ -118,7 +121,12 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
                 
                 string gameResult = _prices[^1] > _prices[0] ? "long" : "short";
                 
-                await hub.Clients.All.SendAsync("GameResult", gameResult, stoppingToken);
+                await hub.Clients.All.SendAsync("GameResult", new
+                {
+                    gameResult,
+                    IsBettingOpen,
+                    IsGameStarted = false
+                }, stoppingToken);
 
                 foreach (var bet in GameHub.GetAllBetsAndClear())
                 {
@@ -126,9 +134,7 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
                     
                     await hub.Clients.Client(bet.ConnectionId).SendAsync("BetResult", new
                     {
-                        BetResult = betResult,
-                        IsBettingOpen,
-                        IsGameStarted = false
+                        BetResult = betResult
                     }, stoppingToken);
                 }
                 
