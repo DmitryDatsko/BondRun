@@ -8,10 +8,9 @@ public class BettingService : BackgroundService
 {
     private readonly IHubContext<GameHub> _hub;
     private readonly CryptoPriceService _cryptoPriceService;
-    private readonly TimeSpan _interval = TimeSpan.FromSeconds(15);
+    private readonly TimeSpan _interval = TimeSpan.FromSeconds(20);
     private readonly object _lock = new();
     private readonly List<decimal> _priceHistory = new();
-    private const int MovementMultiplier = 500_000;
     public bool IsBettingOpen { get; private set; }
     public BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoPriceService)
     {
@@ -75,8 +74,8 @@ public class BettingService : BackgroundService
                 var maxTimeOffset = 100.0;
 
                 var lastSentPrice = _cryptoPriceService.Price;
-                var priceDriftSpeed = 0.3; // шаг, когда цена не меняется
-                var priceChangeBoost = 2.0; // множитель, когда цена изменилась
+                var priceDriftSpeed = 0.3;
+                var priceChangeBoost = 2.0;
                 var fakeProgress = 0.0;
 
                 var timerTask = RunCountdownAsync(gameStopwatch, gameDuration.TotalSeconds, "GameTimer", stoppingToken);
@@ -93,19 +92,18 @@ public class BettingService : BackgroundService
 
                     var baseOffset = progress * maxTimeOffset;
                     var priceOffset = (double)priceDelta * scale;
-
-                    // тут мы дёргаем движение даже если цена не изменилась
+                    
                     bool priceChanged = currentPrice != lastSentPrice;
 
                     if (priceChanged)
                     {
-                        fakeProgress += priceChangeBoost; // ускоряем
+                        fakeProgress += priceChangeBoost;
                         lastSentPrice = currentPrice;
                         _priceHistory.Add(currentPrice);
                     }
                     else
                     {
-                        fakeProgress += priceDriftSpeed; // медленный сдвиг
+                        fakeProgress += priceDriftSpeed;
                     }
 
                     var longY = 120 - (baseOffset + priceOffset + fakeProgress);
@@ -128,6 +126,8 @@ public class BettingService : BackgroundService
                 bool isLong = endPriceSnapshot > startPriceSnapshot;
                 string result = isLong ? "long" : "short";
 
+                await _hub.Clients.All.SendAsync("GameResult", result, stoppingToken);
+                
                 foreach (var bet in bets)
                 {
                     bool betOnLong = bet.Side == "long";
@@ -135,7 +135,6 @@ public class BettingService : BackgroundService
 
                     await _hub.Clients.Client(bet.ConnectionId)
                         .SendAsync("BetResult", new {
-                            GameResult = result,
                             BetResult = outcome,
                             IsBettingOpen,
                             IsGameStarted = false
@@ -143,6 +142,8 @@ public class BettingService : BackgroundService
                 }
 
                 _priceHistory.Clear();
+                
+                await Task.Delay(5000, stoppingToken);
             }
         }
         catch (Exception ex)
