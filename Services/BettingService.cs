@@ -11,12 +11,11 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
     private readonly object _lock = new();
     private readonly Dictionary<string, decimal> _pixels = new()
     {
-        { "longY", 0m}, 
-        { "shortY", 0m} 
+        { "longX", 0m}, 
+        { "shortX", 0m} 
     };
     private readonly List<decimal> _prices = new();
     public bool IsBettingOpen { get; private set; }
-
     private void ClearPixelsDictionary()
     {
         foreach (var key in _pixels.Keys)
@@ -45,7 +44,6 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
 
         await hub.Clients.All.SendAsync(methodName, totalSeconds, cancellationToken: cancellationToken);
     }
-
     private void HandlePriceChanged(object? sender, decimal newPrice)
     {
         _ = CarSpeedOnPriceChange(newPrice)
@@ -60,19 +58,22 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
         
         if (_prices.Count > 2)
         {
-            if(_prices[^1] - _prices[^2] >= 0)
+            var delta = _prices[^1] - _prices[^2];
+            var movement = Math.Abs(delta) * 8.5m;
+            
+            if(delta >= 0)
             {
-                _pixels["longY"] += 10;
+                _pixels["longX"] += movement;
             }
             else
             {
-                _pixels["shortY"] += 10;
+                _pixels["shortX"] += movement;
             }
 
             await hub.Clients.All.SendAsync("RaceTick", new
             {
-                LongY = _pixels["longY"],
-                ShortY = _pixels["shortY"]
+                LongX = _pixels["longX"],
+                ShortX = _pixels["shortX"]
             });
         }
     }
@@ -108,18 +109,18 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
                 
                 cryptoPriceService.OnPriceChanged += HandlePriceChanged;
                 
-                var frameInterval = TimeSpan.FromMilliseconds(150);
+                var frameInterval = TimeSpan.FromMilliseconds(100);
                 while (gameStopwatch.Elapsed < gameDuration)
                 {
                     stoppingToken.ThrowIfCancellationRequested();
                     
-                    _pixels["longY"] += 0.15m;
-                    _pixels["shortY"] += 0.15m;
+                    _pixels["longX"] += 0.15m;
+                    _pixels["shortX"] += 0.15m;
                     
                     await hub.Clients.All.SendAsync("RaceTick", new
                     {
-                        LongY = _pixels["longY"],
-                        ShortY = _pixels["shortY"]
+                        LongX = _pixels["longX"],
+                        ShortX = _pixels["shortX"]
                     }, stoppingToken);
                     
                     await Task.Delay(frameInterval, stoppingToken);
