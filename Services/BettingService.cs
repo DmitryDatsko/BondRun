@@ -15,6 +15,7 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
         { "shortX", 0m} 
     };
     private readonly List<decimal> _prices = new();
+    private decimal _startPrice = -1;
     public bool IsBettingOpen { get; private set; }
     private void ClearPixelsDictionary()
     {
@@ -54,12 +55,18 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
     }
     private async Task CarSpeedOnPriceChange(decimal newPrice)
     {
+        if(_startPrice < 0)
+            _startPrice = newPrice;
+        
         _prices.Add(newPrice);
         
         if (_prices.Count > 2)
         {
             var delta = _prices[^1] - _prices[^2];
-            var movement = Math.Abs(delta) * 8.5m;
+            var trend = newPrice - _startPrice;
+            
+            var alignment = (delta * trend) >= 0 ? 1m : 0.5m;
+            var movement = Math.Abs(delta) * alignment * 15m;
             
             if(delta >= 0)
             {
