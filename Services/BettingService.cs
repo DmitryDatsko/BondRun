@@ -68,7 +68,7 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
             }
             else if (delta < 0)
             {
-                _pixels["shortX"] -= delta * DeltaMultiplier;
+                _pixels["shortX"] += Math.Abs(delta) * DeltaMultiplier;
             }
             
             await hub.Clients.All.SendAsync("RaceTick", new
