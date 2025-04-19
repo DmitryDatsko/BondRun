@@ -21,7 +21,8 @@ public sealed class GameHub : Hub
 
     public async Task PlaceBet(decimal amount, string side)
     {
-        if (!_bettingService.IsBettingOpen)
+        if (!_bettingService.IsBettingOpen &&
+            side is not ("long" or "short" or "tie"))
         {
             await Clients.Caller.SendAsync("BetRejected", "Bets are closed now");
             return;

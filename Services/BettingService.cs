@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace BondRun.Services;
 
-public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoPriceService)
+public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoPriceService, ILogger<BettingService> logger)
     : BackgroundService
 {
     private readonly TimeSpan _interval = TimeSpan.FromSeconds(20);
@@ -14,8 +14,8 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
         { "longX", 0m}, 
         { "shortX", 0m} 
     };
+    private const decimal DeltaMultiplier = 120m;
     private readonly List<decimal> _prices = new();
-    private decimal _startPrice = -1;
     public bool IsBettingOpen { get; private set; }
     private void ClearPixelsDictionary()
     {
@@ -50,33 +50,27 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
         _ = CarSpeedOnPriceChange(newPrice)
             .ContinueWith(t =>
             {
-                if(t.Exception != null) Console.Error.WriteLine($"Exception in price change handler: {t.Exception}");
+                if(t.Exception != null) logger.LogCritical($"Exception in price change handler: {t.Exception}");
             }, TaskContinuationOptions.OnlyOnFaulted);
     }
+
     private async Task CarSpeedOnPriceChange(decimal newPrice)
     {
-        if(_startPrice < 0)
-            _startPrice = newPrice;
-        
         _prices.Add(newPrice);
-        
+
         if (_prices.Count > 2)
         {
             var delta = _prices[^1] - _prices[^2];
-            var trend = newPrice - _startPrice;
-            
-            var alignment = (delta * trend) >= 0 ? 1m : 0.5m;
-            var movement = Math.Abs(delta) * alignment * 15m;
-            
-            if(delta >= 0)
-            {
-                _pixels["longX"] += movement;
-            }
-            else
-            {
-                _pixels["shortX"] += movement;
-            }
 
+            if (delta > 0)
+            {
+                _pixels["longX"] += delta * DeltaMultiplier;
+            }
+            else if (delta < 0)
+            {
+                _pixels["shortX"] -= delta * DeltaMultiplier;
+            }
+            
             await hub.Clients.All.SendAsync("RaceTick", new
             {
                 LongX = _pixels["longX"],
@@ -84,6 +78,7 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
             });
         }
     }
+    
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var timer = new PeriodicTimer(_interval);
@@ -136,7 +131,8 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
                 cryptoPriceService.OnPriceChanged -= HandlePriceChanged;
                 await timerTask;
                 
-                string gameResult = _prices[^1] > _prices[0] ? "long" : "short";
+                string gameResult = _prices[^1] == _prices[0] ? "tie" :
+                    _prices[^1] > _prices[0] ? "long" : "short";
                 
                 await hub.Clients.All.SendAsync("GameResult", new
                 {
@@ -159,9 +155,9 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
                 await Task.Delay(5000, stoppingToken);
             }
         }
-        catch (Exception ex)
+        catch (OperationCanceledException ex)
         {
-            throw;
+            logger.LogCritical($"Operation cancelled exception: {ex}");
         }
     }
 }
