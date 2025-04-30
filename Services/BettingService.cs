@@ -14,7 +14,7 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
         { "longX", 0m}, 
         { "shortX", 0m} 
     };
-    private const decimal DeltaMultiplier = 120m;
+    private const decimal DeltaMultiplier = 100m;
     private readonly List<decimal> _prices = new();
     public bool IsBettingOpen { get; private set; }
     private void ClearPixelsDictionary()
@@ -53,7 +53,6 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
                 if(t.Exception != null) logger.LogCritical($"Exception in price change handler: {t.Exception}");
             }, TaskContinuationOptions.OnlyOnFaulted);
     }
-
     private async Task CarSpeedOnPriceChange(decimal newPrice)
     {
         _prices.Add(newPrice);
@@ -64,11 +63,11 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
 
             if (delta > 0)
             {
-                _pixels["longX"] += delta * DeltaMultiplier;
+                _pixels["longX"] += delta;
             }
             else if (delta < 0)
             {
-                _pixels["shortX"] += Math.Abs(delta) * DeltaMultiplier;
+                _pixels["shortX"] += Math.Abs(delta);
             }
             
             await hub.Clients.All.SendAsync("RaceTick", new
@@ -78,7 +77,6 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
             });
         }
     }
-    
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var timer = new PeriodicTimer(_interval);
@@ -152,6 +150,7 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
                 }
                 
                 ClearPixelsDictionary();
+                _prices.Clear();
                 await Task.Delay(5000, stoppingToken);
             }
         }
