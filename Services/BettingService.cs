@@ -4,18 +4,29 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace BondRun.Services;
 
-public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoPriceService, ILogger<BettingService> logger)
-    : BackgroundService
+public class BettingService : BackgroundService
 {
-    private readonly TimeSpan _interval = TimeSpan.FromSeconds(20);
+    private readonly TimeSpan _gameDuration = TimeSpan.FromSeconds(30);
+    private readonly TimeSpan _betTime = TimeSpan.FromSeconds(5);
+    private readonly TimeSpan _delayAfterGame = TimeSpan.FromSeconds(5);
+    private readonly TimeSpan _totalGameTime;
     private readonly object _lock = new();
     private readonly Dictionary<string, decimal> _pixels = new()
     {
         { "longX", 0m}, 
         { "shortX", 0m} 
     };
-    private const decimal DeltaMultiplier = 100m;
     private readonly List<decimal> _prices = new();
+    private readonly IHubContext<GameHub> _hub;
+    private readonly CryptoPriceService _cryptoPriceService;
+    private readonly ILogger<BettingService> _logger;
+    public BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoPriceService, ILogger<BettingService> logger)
+    {
+        _hub = hub;
+        _cryptoPriceService = cryptoPriceService;
+        _logger = logger;
+        _totalGameTime = _gameDuration + _betTime + _delayAfterGame;
+    }
     public bool IsBettingOpen { get; private set; }
     private void ClearPixelsDictionary()
     {
@@ -37,20 +48,20 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
             if (elapsed != lastSentTime)
             {
                 lastSentTime = elapsed;
-                await hub.Clients.All.SendAsync(methodName, elapsed, cancellationToken: cancellationToken);
+                await _hub.Clients.All.SendAsync(methodName, elapsed, cancellationToken: cancellationToken);
             }
 
             await Task.Delay(50, cancellationToken);
         }
 
-        await hub.Clients.All.SendAsync(methodName, totalSeconds, cancellationToken: cancellationToken);
+        await _hub.Clients.All.SendAsync(methodName, totalSeconds, cancellationToken: cancellationToken);
     }
     private void HandlePriceChanged(object? sender, decimal newPrice)
     {
         _ = CarSpeedOnPriceChange(newPrice)
             .ContinueWith(t =>
             {
-                if(t.Exception != null) logger.LogCritical($"Exception in price change handler: {t.Exception}");
+                if(t.Exception != null) _logger.LogCritical($"Exception in price change handler: {t.Exception}");
             }, TaskContinuationOptions.OnlyOnFaulted);
     }
     private async Task CarSpeedOnPriceChange(decimal newPrice)
@@ -70,7 +81,7 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
                 _pixels["shortX"] += Math.Abs(delta);
             }
             
-            await hub.Clients.All.SendAsync("RaceTick", new
+            await _hub.Clients.All.SendAsync("RaceTick", new
             {
                 LongX = _pixels["longX"],
                 ShortX = _pixels["shortX"]
@@ -79,45 +90,43 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
     }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var timer = new PeriodicTimer(_interval);
+        var timer = new PeriodicTimer(_totalGameTime);
 
         try
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
                 lock (_lock) { IsBettingOpen = true; }
-                await hub.Clients.All.SendAsync("BettingStarted", new {
+                await _hub.Clients.All.SendAsync("BettingStarted", new {
                     IsBettingOpen,
                     IsGameStarted = false
                 }, cancellationToken: stoppingToken);
                 
                 var betStopwatch = Stopwatch.StartNew();
-                await RunCountdownAsync(betStopwatch, 5, "BetTimer", cancellationToken: stoppingToken);
+                await RunCountdownAsync(betStopwatch, _betTime.TotalSeconds, "BetTimer", cancellationToken: stoppingToken);
 
                 lock (_lock) { IsBettingOpen = false; }
-                await hub.Clients.All.SendAsync("BettingEnded", new
+                await _hub.Clients.All.SendAsync("BettingEnded", new
                 {
                     IsBettingOpen,
                     IsGameStarted = true
                 },cancellationToken: stoppingToken);
-
                 
                 var gameStopwatch = Stopwatch.StartNew();
-                var gameDuration = TimeSpan.FromSeconds(10);
                 
-                var timerTask = RunCountdownAsync(gameStopwatch, gameDuration.TotalSeconds, "GameTimer", stoppingToken);
+                var timerTask = RunCountdownAsync(gameStopwatch, _gameDuration.TotalSeconds, "GameTimer", stoppingToken);
                 
-                cryptoPriceService.OnPriceChanged += HandlePriceChanged;
+                _cryptoPriceService.OnPriceChanged += HandlePriceChanged;
                 
                 var frameInterval = TimeSpan.FromMilliseconds(100);
-                while (gameStopwatch.Elapsed < gameDuration)
+                while (gameStopwatch.Elapsed < _gameDuration)
                 {
                     stoppingToken.ThrowIfCancellationRequested();
                     
                     _pixels["longX"] += 0.15m;
                     _pixels["shortX"] += 0.15m;
                     
-                    await hub.Clients.All.SendAsync("RaceTick", new
+                    await _hub.Clients.All.SendAsync("RaceTick", new
                     {
                         LongX = _pixels["longX"],
                         ShortX = _pixels["shortX"]
@@ -126,13 +135,13 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
                     await Task.Delay(frameInterval, stoppingToken);
                 }
                 
-                cryptoPriceService.OnPriceChanged -= HandlePriceChanged;
+                _cryptoPriceService.OnPriceChanged -= HandlePriceChanged;
                 await timerTask;
                 
                 string gameResult = _prices[^1] == _prices[0] ? "tie" :
                     _prices[^1] > _prices[0] ? "long" : "short";
                 
-                await hub.Clients.All.SendAsync("GameResult", new
+                await _hub.Clients.All.SendAsync("GameResult", new
                 {
                     gameResult,
                     IsBettingOpen,
@@ -143,7 +152,7 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
                 {
                     string betResult = gameResult == bet.Side ? "win" : "lose";
                     
-                    await hub.Clients.Client(bet.ConnectionId).SendAsync("BetResult", new
+                    await _hub.Clients.Client(bet.ConnectionId).SendAsync("BetResult", new
                     {
                         BetResult = betResult
                     }, stoppingToken);
@@ -151,12 +160,12 @@ public class BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoP
                 
                 ClearPixelsDictionary();
                 _prices.Clear();
-                await Task.Delay(5000, stoppingToken);
+                await Task.Delay(_delayAfterGame, stoppingToken);
             }
         }
         catch (OperationCanceledException ex)
         {
-            logger.LogCritical($"Operation cancelled exception: {ex}");
+            _logger.LogCritical($"Operation cancelled exception: {ex}");
         }
     }
 }
