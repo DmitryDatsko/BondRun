@@ -14,7 +14,11 @@ public sealed class GameHub : Hub
 
     public override async Task OnConnectedAsync()
     {
-        await Clients.Caller.SendAsync("OnConnected");
+        await Clients.Caller.SendAsync("OnConnected", new
+        {
+            _bettingService.IsBettingOpen,
+            _bettingService.IsGameStarted
+        });
         
         await base.OnConnectedAsync();
     }

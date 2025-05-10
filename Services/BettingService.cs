@@ -20,6 +20,8 @@ public class BettingService : BackgroundService
     private readonly IHubContext<GameHub> _hub;
     private readonly CryptoPriceService _cryptoPriceService;
     private readonly ILogger<BettingService> _logger;
+    public bool IsBettingOpen { get; private set; }
+    public bool IsGameStarted { get; private set; }
     public BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoPriceService, ILogger<BettingService> logger)
     {
         _hub = hub;
@@ -27,7 +29,6 @@ public class BettingService : BackgroundService
         _logger = logger;
         _totalGameTime = _gameDuration + _betTime + _delayAfterGame;
     }
-    public bool IsBettingOpen { get; private set; }
     private void ClearPixelsDictionary()
     {
         foreach (var key in _pixels.Keys)
@@ -97,19 +98,21 @@ public class BettingService : BackgroundService
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
                 lock (_lock) { IsBettingOpen = true; }
+                IsGameStarted = false;
                 await _hub.Clients.All.SendAsync("BettingStarted", new {
                     IsBettingOpen,
-                    IsGameStarted = false
+                    IsGameStarted
                 }, cancellationToken: stoppingToken);
                 
                 var betStopwatch = Stopwatch.StartNew();
                 await RunCountdownAsync(betStopwatch, _betTime.TotalSeconds, "BetTimer", cancellationToken: stoppingToken);
 
                 lock (_lock) { IsBettingOpen = false; }
+                IsGameStarted = true;
                 await _hub.Clients.All.SendAsync("BettingEnded", new
                 {
                     IsBettingOpen,
-                    IsGameStarted = true
+                    IsGameStarted
                 },cancellationToken: stoppingToken);
                 
                 var gameStopwatch = Stopwatch.StartNew();
@@ -141,11 +144,12 @@ public class BettingService : BackgroundService
                 string gameResult = _prices[^1] == _prices[0] ? "tie" :
                     _prices[^1] > _prices[0] ? "long" : "short";
                 
+                IsGameStarted = false;
                 await _hub.Clients.All.SendAsync("GameResult", new
                 {
                     gameResult,
                     IsBettingOpen,
-                    IsGameStarted = false
+                    IsGameStarted    
                 }, stoppingToken);
 
                 foreach (var bet in GameHub.GetAllBetsAndClear())
