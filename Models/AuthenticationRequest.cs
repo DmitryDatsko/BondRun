@@ -2,7 +2,7 @@
 
 public class AuthenticationRequest
 {
-    public string Address { get; set; }
-    public string Signature { get; set; }
-    public string Message { get; set; }
+    public required string Address { get; set; }
+    public required string Signature { get; set; }
+    public required string Message { get; set; }
 }

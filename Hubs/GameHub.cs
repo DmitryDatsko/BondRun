@@ -5,27 +5,22 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace BondRun.Hubs;
 
-public sealed class GameHub : Hub
+public sealed class GameHub(BettingService bettingService) : Hub
 {
-    private static readonly ConcurrentDictionary<string, Bet> _bets = new();
-    private readonly BettingService _bettingService;
-
-    public GameHub(BettingService bettingService) => _bettingService = bettingService;
-
+    private static readonly ConcurrentDictionary<string, Bet> Bets = new();
     public override async Task OnConnectedAsync()
     {
         await Clients.Caller.SendAsync("OnConnected", new
         {
-            _bettingService.IsBettingOpen,
-            _bettingService.IsGameStarted
+            bettingService.IsBettingOpen,
+            bettingService.IsGameStarted
         });
         
         await base.OnConnectedAsync();
     }
-
-    public async Task PlaceBet(decimal amount, string side)
+    public async Task PlaceBet(decimal amount, string side, string walletAddress)
     {
-        if (!_bettingService.IsBettingOpen &&
+        if (bettingService.IsBettingOpen == false &&
             side is not ("long" or "short" or "tie"))
         {
             await Clients.Caller.SendAsync("BetRejected", "Bets are closed now");
@@ -39,21 +34,20 @@ public sealed class GameHub : Hub
             Side = side
         };
 
-        _bets.TryAdd(Context.ConnectionId, bet);
+        Bets.TryAdd(Context.ConnectionId, bet);
         
         await Clients.Caller.SendAsync("BetAccepted", bet);
     }
-
     public static List<Bet> GetAllBetsAndClear()
     {
-        var list = _bets.Values.ToList();
-        _bets.Clear();
+        var list = Bets.Values.ToList();
+        Bets.Clear();
         return list;
     }
 
     public override Task OnDisconnectedAsync(Exception? exception)
     {
-        _bets.TryRemove(Context.ConnectionId, out _);
+        Bets.TryRemove(Context.ConnectionId, out _);
         return base.OnDisconnectedAsync(exception);
     }
 }

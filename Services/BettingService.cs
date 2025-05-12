@@ -99,17 +99,17 @@ public class BettingService : BackgroundService
             {
                 lock (_lock) { IsBettingOpen = true; }
                 IsGameStarted = false;
-                await _hub.Clients.All.SendAsync("BettingStarted", new {
+                await _hub.Clients.All.SendAsync("BettingState", new {
                     IsBettingOpen,
                     IsGameStarted
                 }, cancellationToken: stoppingToken);
                 
                 var betStopwatch = Stopwatch.StartNew();
-                await RunCountdownAsync(betStopwatch, _betTime.TotalSeconds, "BetTimer", cancellationToken: stoppingToken);
+                await RunCountdownAsync(betStopwatch, _betTime.TotalSeconds, "Timer", cancellationToken: stoppingToken);
 
                 lock (_lock) { IsBettingOpen = false; }
                 IsGameStarted = true;
-                await _hub.Clients.All.SendAsync("BettingEnded", new
+                await _hub.Clients.All.SendAsync("BettingState", new
                 {
                     IsBettingOpen,
                     IsGameStarted
@@ -117,7 +117,7 @@ public class BettingService : BackgroundService
                 
                 var gameStopwatch = Stopwatch.StartNew();
                 
-                var timerTask = RunCountdownAsync(gameStopwatch, _gameDuration.TotalSeconds, "GameTimer", stoppingToken);
+                var timerTask = RunCountdownAsync(gameStopwatch, _gameDuration.TotalSeconds, "Timer", stoppingToken);
                 
                 _cryptoPriceService.OnPriceChanged += HandlePriceChanged;
                 
