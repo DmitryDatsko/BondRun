@@ -1,14 +1,25 @@
-﻿using BondRun.Models;
+﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using BondRun.Configuration;
+using BondRun.Models;
+using BondRun.Services.Token;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Nethereum.Signer;
 
 namespace BondRun.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIdentity) : ControllerBase
 {
-    [HttpPost]
+    private readonly JwtConfig _jwtConfig = jwtConfig.Value;
+    private readonly IUserIdentity _userIdentity = userIdentity;
+    
+    [HttpPost("verifySignature")]
     public IActionResult Authenticate([FromBody] AuthenticationRequest request)
     {
         var message = request.Message;
@@ -19,9 +30,66 @@ public class AuthController : ControllerBase
 
         if (string.Equals(recoveredAddress, request.Address, StringComparison.CurrentCultureIgnoreCase))
         {
-            return Ok(new { message = "Authentication successful" });
+            var accessToken = CreateToken(new User { Id = Guid.NewGuid(), Address = request.Address });
+            if (!string.IsNullOrEmpty(accessToken))
+            {
+                SetCookie(accessToken, HttpContext);
+                return Ok(new { message = "Authentication successful" });
+            }
         }
 
         return Unauthorized(new { message = "Invalid signature" });
+    }
+
+    [HttpPost("logout")]
+    [Authorize]
+    public IActionResult Logout()
+    {
+        RemoveCookie(HttpContext);
+
+        return Unauthorized();
+    }
+    
+    private string CreateToken(User user)
+    {
+        var claims = new List<Claim>
+        {
+            new (ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new ("wallet_address", user.Address)
+        };
+        
+        var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(_jwtConfig.AccessTokenSecret));
+        
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
+
+        var token = new JwtSecurityToken(
+            claims: claims,
+            expires: DateTime.UtcNow.AddDays(1),
+            signingCredentials: credentials
+        );
+        
+        var jwt = new JwtSecurityTokenHandler().WriteToken(token);
+        
+        return jwt;
+    }
+    
+    private static void SetCookie(string accessToken, HttpContext httpContext)
+    {
+        httpContext.Response.Cookies.Append("XMN3bf8G9Vw3hSU", accessToken,
+            new CookieOptions
+            {
+                Expires = DateTime.UtcNow.AddDays(1)
+            });
+    }
+
+    private static void RemoveCookie(HttpContext httpContext)
+    {
+        httpContext.Response.Cookies.Delete("XMN3bf8G9Vw3hSU",
+            new CookieOptions
+            {
+                MaxAge = TimeSpan.Zero,
+                Secure = true,
+                SameSite = SameSiteMode.None
+            });
     }
 }

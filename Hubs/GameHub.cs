@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using BondRun.Models;
 using BondRun.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace BondRun.Hubs;
@@ -18,6 +19,7 @@ public sealed class GameHub(BettingService bettingService) : Hub
         
         await base.OnConnectedAsync();
     }
+    [Authorize]
     public async Task PlaceBet(decimal amount, string side, string walletAddress)
     {
         if (bettingService.IsBettingOpen == false &&
