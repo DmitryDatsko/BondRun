@@ -1,5 +1,6 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using BondRun.Configuration;
 using BondRun.Models;
@@ -19,7 +20,7 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
     private readonly JwtConfig _jwtConfig = jwtConfig.Value;
     private readonly IUserIdentity _userIdentity = userIdentity;
     
-    [HttpPost("verifySignature")]
+    [HttpPost("verify")]
     public IActionResult Authenticate([FromBody] AuthenticationRequest request)
     {
         var message = request.Message;
@@ -39,6 +40,12 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
         }
 
         return Unauthorized(new { message = "Invalid signature" });
+    }
+
+    [HttpGet("nonce")]
+    public IActionResult Nonce()
+    {
+        return Ok(GenerateSecureNonce());
     }
 
     [HttpPost("logout")]
@@ -91,5 +98,12 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
                 Secure = true,
                 SameSite = SameSiteMode.None
             });
+    }
+    private static byte[] GenerateSecureNonce(int length = 64)
+    {
+        var nonce = new byte[length];
+        using var rng = RandomNumberGenerator.Create();
+        rng.GetBytes(nonce);
+        return nonce;
     }
 }

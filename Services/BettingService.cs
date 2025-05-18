@@ -6,7 +6,7 @@ namespace BondRun.Services;
 
 public class BettingService : BackgroundService
 {
-    private readonly TimeSpan _gameDuration = TimeSpan.FromSeconds(30);
+    private readonly TimeSpan _gameDuration = TimeSpan.FromSeconds(15);
     private readonly TimeSpan _betTime = TimeSpan.FromSeconds(5);
     private readonly TimeSpan _delayAfterGame = TimeSpan.FromSeconds(5);
     private readonly TimeSpan _totalGameTime;
