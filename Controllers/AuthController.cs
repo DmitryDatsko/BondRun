@@ -27,15 +27,21 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
         var signature = request.Signature;
 
         var signer = new EthereumMessageSigner();
+        
         var recoveredAddress = signer.EncodeUTF8AndEcRecover(message, signature);
 
-        if (string.Equals(recoveredAddress, request.Address, StringComparison.CurrentCultureIgnoreCase))
+        if (!string.IsNullOrEmpty(recoveredAddress))
         {
-            var accessToken = CreateToken(new User { Id = Guid.NewGuid(), Address = request.Address });
+            var accessToken = CreateToken(new User { Id = Guid.NewGuid(), Address = recoveredAddress });
+            
             if (!string.IsNullOrEmpty(accessToken))
             {
                 SetCookie(accessToken, HttpContext);
-                return Ok(new { message = "Authentication successful" });
+                return Ok(new
+                {
+                    message = "Authentication successful",
+                    address = recoveredAddress
+                });
             }
         }
 
