@@ -37,11 +37,7 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
             if (!string.IsNullOrEmpty(accessToken))
             {
                 SetCookie(accessToken, HttpContext);
-                return Ok(new
-                {
-                    message = "Authentication successful",
-                    address = recoveredAddress
-                });
+                return Ok(new { message = "Authentication successful" });
             }
         }
 
