@@ -106,11 +106,20 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
                 SameSite = SameSiteMode.None
             });
     }
-    private static byte[] GenerateSecureNonce(int length = 64)
+    private static string GenerateSecureNonce(int length = 64)
     {
-        var nonce = new byte[length];
+        const string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        var nonce = new char[length];
         using var rng = RandomNumberGenerator.Create();
-        rng.GetBytes(nonce);
-        return nonce;
+        var buffer = new byte[sizeof(uint)];
+
+        for (int i = 0; i < length; i++)
+        {
+            rng.GetBytes(buffer);
+            uint num = BitConverter.ToUInt32(buffer, 0);
+            nonce[i] = chars[(int)(num % (uint)chars.Length)];
+        }
+
+        return new string(nonce);
     }
 }
