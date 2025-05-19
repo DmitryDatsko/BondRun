@@ -28,4 +28,25 @@ public class UserIdentity : IUserIdentity
             return Guid.Empty;
         }
     }
+    
+    public string GetAddressByCookie(HttpRequest request)
+    {
+        try
+        {
+            string? accessToken = request.Cookies["XMN3bf8G9Vw3hSU"];
+
+            if (string.IsNullOrEmpty(accessToken))
+                return string.Empty;
+
+            var jwt = new JwtSecurityTokenHandler().ReadJwtToken(accessToken);
+
+            var claim = jwt.Claims.FirstOrDefault(i => i.Type == "wallet_address");
+
+            return claim == null ? string.Empty : claim.Value;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
 }

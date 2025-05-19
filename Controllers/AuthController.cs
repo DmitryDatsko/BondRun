@@ -47,6 +47,13 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
     {
         return Ok(GenerateSecureNonce());
     }
+    
+    [HttpGet("me")]
+    public IActionResult Me()
+    {
+        var address = _userIdentity.GetAddressByCookie(Request);
+        return Ok(address);
+    }
 
     [HttpPost("logout")]
     [Authorize]
