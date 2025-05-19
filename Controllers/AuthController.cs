@@ -52,7 +52,7 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
     public IActionResult Me()
     {
         var address = _userIdentity.GetAddressByCookie(Request);
-        return Ok(address);
+        return Ok(new { address });
     }
 
     [HttpPost("logout")]
