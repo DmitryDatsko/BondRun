@@ -35,6 +35,7 @@ builder.Services.AddCors(options =>
 builder.Services.Configure<JwtConfig>(builder.Configuration.GetSection(JwtConfig.SectionName));
 
 builder.Services.AddScoped<IUserIdentity, UserIdentity>();
+builder.Services.AddHostedService<BettingService>();
 
 builder.Services.AddAuthentication(options =>
 {
@@ -60,7 +61,15 @@ builder.Services.AddAuthentication(options =>
     {
         OnMessageReceived = context =>
         {
-            context.Token = context.Request.Query["XMN3bf8G9Vw3hSU"];
+            if (context.Request.Cookies.TryGetValue("XMN3bf8G9Vw3hSU", out var token))
+            {
+                context.Token = token;
+            }
+
+            if (string.IsNullOrEmpty(context.Token))
+            {
+                context.Token = context.Request.Query["XMN3bf8G9Vw3hSU"];
+            }
             
             return Task.CompletedTask;
         }
@@ -82,9 +91,15 @@ app.UseCookiePolicy(new CookiePolicyOptions
     Secure = CookieSecurePolicy.Always
 });
 
+app.UseHttpsRedirection();
+
+app.UseCors(myAllowSpecificOrigins);
+
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapControllers();
 app.MapHub<GameHub>("/gamehub");
-app.UseCors(myAllowSpecificOrigins);
 app.UseHttpsRedirection();
 
 app.Run();

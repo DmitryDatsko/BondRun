@@ -6,6 +6,7 @@ using BondRun.Configuration;
 using BondRun.Models;
 using BondRun.Services.Token;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.CookiePolicy;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -14,12 +15,11 @@ using Nethereum.Signer;
 namespace BondRun.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/auth")]
 public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIdentity) : ControllerBase
 {
     private readonly JwtConfig _jwtConfig = jwtConfig.Value;
-    private readonly IUserIdentity _userIdentity = userIdentity;
-    
+
     [HttpPost("verify")]
     public IActionResult Authenticate([FromBody] AuthenticationRequest request)
     {
@@ -51,10 +51,14 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
     }
     
     [HttpGet("me")]
+    [Authorize]
     public IActionResult Me()
     {
-        var address = _userIdentity.GetAddressByCookie(Request);
-        return Ok(new { address });
+        var address = userIdentity.GetAddressByCookie(Request);
+        
+        return string.IsNullOrEmpty(address) 
+            ? Unauthorized() 
+            : Ok(new { address });
     }
 
     [HttpPost("logout")]
@@ -65,7 +69,6 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
 
         return Unauthorized();
     }
-    
     private string CreateToken(User user)
     {
         var claims = new List<Claim>
@@ -97,17 +100,20 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
                 Expires = DateTime.UtcNow.AddDays(1)
             });
     }
-
     private static void RemoveCookie(HttpContext httpContext)
     {
-        httpContext.Response.Cookies.Delete("XMN3bf8G9Vw3hSU",
-            new CookieOptions
-            {
-                MaxAge = TimeSpan.Zero,
-                Secure = true,
-                SameSite = SameSiteMode.None
-            });
+        var deleteOptions = new CookieOptions
+        {
+            Path = "/",
+            Secure = true,
+            HttpOnly = true,
+            SameSite = SameSiteMode.None,
+            Expires = DateTimeOffset.UnixEpoch
+        };
+
+        httpContext.Response.Cookies.Delete("XMN3bf8G9Vw3hSU", deleteOptions);
     }
+    
     private static string GenerateSecureNonce(int length = 64)
     {
         const string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
