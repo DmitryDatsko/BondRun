@@ -44,7 +44,7 @@ builder.Services.AddAuthentication(options =>
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 }).AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
 {
-    options.RequireHttpsMetadata = true;
+    //options.RequireHttpsMetadata = true;
     options.SaveToken = true;
     options.TokenValidationParameters = new()
     {
@@ -84,16 +84,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseCors(myAllowSpecificOrigins);
+
 app.UseCookiePolicy(new CookiePolicyOptions
 {
     MinimumSameSitePolicy = SameSiteMode.None,
     HttpOnly = HttpOnlyPolicy.Always,
     Secure = CookieSecurePolicy.Always
 });
-
-app.UseHttpsRedirection();
-
-app.UseCors(myAllowSpecificOrigins);
 
 app.UseAuthentication();
 app.UseAuthorization();

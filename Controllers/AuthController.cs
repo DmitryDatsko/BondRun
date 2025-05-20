@@ -97,6 +97,10 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
         httpContext.Response.Cookies.Append("XMN3bf8G9Vw3hSU", accessToken,
             new CookieOptions
             {
+                Path = "/",
+                Secure = true,
+                HttpOnly = true,
+                SameSite = SameSiteMode.None,
                 Expires = DateTime.UtcNow.AddDays(1)
             });
     }
