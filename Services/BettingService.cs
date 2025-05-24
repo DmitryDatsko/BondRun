@@ -6,6 +6,9 @@ namespace BondRun.Services;
 
 public class BettingService : BackgroundService
 {
+    private const double TotalPixels = 332.0;
+    private Stopwatch _gameStopwatch;
+    private double _lastElapsedSeconds;
     private readonly TimeSpan _gameDuration = TimeSpan.FromSeconds(15);
     private readonly TimeSpan _betTime = TimeSpan.FromSeconds(5);
     private readonly TimeSpan _delayAfterGame = TimeSpan.FromSeconds(5);
@@ -71,16 +74,18 @@ public class BettingService : BackgroundService
 
         if (_prices.Count > 2)
         {
-            var delta = _prices[^1] - _prices[^2];
-
-            if (delta > 0)
-            {
-                _pixels["longX"] += delta;
-            }
-            else if (delta < 0)
-            {
-                _pixels["shortX"] += Math.Abs(delta);
-            }
+            double elapsed = _gameStopwatch.Elapsed.TotalSeconds;
+            double dt = elapsed - _lastElapsedSeconds;
+            _lastElapsedSeconds = elapsed;
+            
+            decimal priceDelta = _prices[^1] - _prices[^2];
+            decimal rawPx = priceDelta * 7.5m;
+            
+            decimal maxStep = (decimal)(TotalPixels * (dt / _gameDuration.TotalSeconds));
+            decimal movePx = Math.Clamp(rawPx, -maxStep, maxStep);
+            
+            if(movePx > 0) _pixels["longX"] += movePx;
+            if(movePx < 0) _pixels["shortX"] += Math.Abs(movePx);
             
             await _hub.Clients.All.SendAsync("RaceTick", new
             {
@@ -115,14 +120,15 @@ public class BettingService : BackgroundService
                     IsGameStarted
                 },cancellationToken: stoppingToken);
                 
-                var gameStopwatch = Stopwatch.StartNew();
+                _gameStopwatch = Stopwatch.StartNew();
+                _lastElapsedSeconds = 0.0;
                 
-                var timerTask = RunCountdownAsync(gameStopwatch, _gameDuration.TotalSeconds, "Timer", stoppingToken);
+                var timerTask = RunCountdownAsync(_gameStopwatch, _gameDuration.TotalSeconds, "Timer", stoppingToken);
                 
                 _cryptoPriceService.OnPriceChanged += HandlePriceChanged;
                 
                 var frameInterval = TimeSpan.FromMilliseconds(100);
-                while (gameStopwatch.Elapsed < _gameDuration)
+                while (_gameStopwatch.Elapsed < _gameDuration)
                 {
                     stoppingToken.ThrowIfCancellationRequested();
                     

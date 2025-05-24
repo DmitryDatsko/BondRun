@@ -117,7 +117,6 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
 
         httpContext.Response.Cookies.Delete("XMN3bf8G9Vw3hSU", deleteOptions);
     }
-    
     private static string GenerateSecureNonce(int length = 64)
     {
         const string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
