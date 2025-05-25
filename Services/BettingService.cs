@@ -1,4 +1,6 @@
 ﻿using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using BondRun.Hubs;
 using Microsoft.AspNetCore.SignalR;
 
@@ -6,7 +8,17 @@ namespace BondRun.Services;
 
 public class BettingService : BackgroundService
 {
+    // for logging
+    private static readonly string _logFilePath = Path.Combine(AppContext.BaseDirectory, "game_results.jsonl");
+    private static readonly JsonSerializerOptions _jsonOpts = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = 
+            JsonIgnoreCondition.WhenWritingNull
+    };
+    
     private const double TotalPixels = 332.0;
+    private const decimal PricePerPixel = 10.0m;
     private Stopwatch _gameStopwatch;
     private double _lastElapsedSeconds;
     private readonly TimeSpan _gameDuration = TimeSpan.FromSeconds(15);
@@ -79,13 +91,13 @@ public class BettingService : BackgroundService
             _lastElapsedSeconds = elapsed;
             
             decimal priceDelta = _prices[^1] - _prices[^2];
-            decimal rawPx = priceDelta * 7.5m;
+            decimal rawPx = priceDelta * PricePerPixel;
             
             decimal maxStep = (decimal)(TotalPixels * (dt / _gameDuration.TotalSeconds));
             decimal movePx = Math.Clamp(rawPx, -maxStep, maxStep);
             
             if(movePx > 0) _pixels["longX"] += movePx;
-            if(movePx < 0) _pixels["shortX"] += Math.Abs(movePx);
+            if (movePx < 0) _pixels["shortX"] += Math.Abs(movePx);
             
             await _hub.Clients.All.SendAsync("RaceTick", new
             {
@@ -126,22 +138,33 @@ public class BettingService : BackgroundService
                 var timerTask = RunCountdownAsync(_gameStopwatch, _gameDuration.TotalSeconds, "Timer", stoppingToken);
                 
                 _cryptoPriceService.OnPriceChanged += HandlePriceChanged;
+
+                var frameIntervalMs = 100.0;
+                var nextTickMs = frameIntervalMs;
                 
-                var frameInterval = TimeSpan.FromMilliseconds(100);
                 while (_gameStopwatch.Elapsed < _gameDuration)
                 {
                     stoppingToken.ThrowIfCancellationRequested();
-                    
-                    _pixels["longX"] += 0.15m;
-                    _pixels["shortX"] += 0.15m;
-                    
-                    await _hub.Clients.All.SendAsync("RaceTick", new
+
+                    var elapsedMs = _gameStopwatch.Elapsed.TotalMilliseconds;
+                    if (elapsedMs >= nextTickMs)
                     {
-                        LongX = _pixels["longX"],
-                        ShortX = _pixels["shortX"]
-                    }, stoppingToken);
+                        do
+                        {
+                            _pixels["longX"] += 0.15m;
+                            _pixels["shortX"] += 0.15m;
+                            nextTickMs += frameIntervalMs;
+                        }
+                        while (elapsedMs >= nextTickMs);
+                        
+                        await _hub.Clients.All.SendAsync("RaceTick", new
+                        {
+                            LongX  = _pixels["longX"],
+                            ShortX = _pixels["shortX"]
+                        }, stoppingToken);
+                    }
                     
-                    await Task.Delay(frameInterval, stoppingToken);
+                    await Task.Delay(1, stoppingToken);
                 }
                 
                 _cryptoPriceService.OnPriceChanged -= HandlePriceChanged;
@@ -167,6 +190,23 @@ public class BettingService : BackgroundService
                         BetResult = betResult
                     }, stoppingToken);
                 }
+                
+                // start logging
+
+                var entry = new
+                {
+                    TimeStampUtc = DateTime.UtcNow,
+                    GameResultByPrice = gameResult,
+                    LongX = _pixels["longX"],
+                    ShortX = _pixels["shortX"],
+                    GameResultByPixels = _pixels["longX"] == _pixels["shortX"] ? "tie" :
+                        _pixels["longX"] > _pixels["shortX"] ? "long" : "short"
+                };
+                
+                var jsonLine = JsonSerializer.Serialize(entry, _jsonOpts);
+                await File.AppendAllTextAsync(_logFilePath, jsonLine, stoppingToken);
+                
+                // end of logging
                 
                 ClearPixelsDictionary();
                 _prices.Clear();

@@ -40,6 +40,7 @@ public sealed class GameHub(BettingService bettingService) : Hub
         
         await Clients.Caller.SendAsync("BetAccepted", bet);
     }
+    
     public static List<Bet> GetAllBetsAndClear()
     {
         var list = Bets.Values.ToList();
