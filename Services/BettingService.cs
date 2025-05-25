@@ -91,7 +91,7 @@ public class BettingService : BackgroundService
             _lastElapsedSeconds = elapsed;
             
             decimal priceDelta = _prices[^1] - _prices[^2];
-            decimal rawPx = priceDelta * PricePerPixel;
+            decimal rawPx = priceDelta;
             
             decimal maxStep = (decimal)(TotalPixels * (dt / _gameDuration.TotalSeconds));
             decimal movePx = Math.Clamp(rawPx, -maxStep, maxStep);
