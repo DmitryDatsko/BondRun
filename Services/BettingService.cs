@@ -18,12 +18,11 @@ public class BettingService : BackgroundService
     };
     
     private const double TotalPixels = 332.0;
-    private const decimal PricePerPixel = 10.0m;
     private Stopwatch _gameStopwatch;
     private double _lastElapsedSeconds;
     private readonly TimeSpan _gameDuration = TimeSpan.FromSeconds(15);
-    private readonly TimeSpan _betTime = TimeSpan.FromSeconds(5);
-    private readonly TimeSpan _delayAfterGame = TimeSpan.FromSeconds(5);
+    private readonly TimeSpan _betTime = TimeSpan.FromSeconds(1);
+    private readonly TimeSpan _delayAfterGame = TimeSpan.FromSeconds(1);
     private readonly TimeSpan _totalGameTime;
     private readonly object _lock = new();
     private readonly Dictionary<string, decimal> _pixels = new()
@@ -91,13 +90,13 @@ public class BettingService : BackgroundService
             _lastElapsedSeconds = elapsed;
             
             decimal priceDelta = _prices[^1] - _prices[^2];
-            decimal rawPx = priceDelta;
+            decimal rawPx = Math.Abs(priceDelta);
             
             decimal maxStep = (decimal)(TotalPixels * (dt / _gameDuration.TotalSeconds));
-            decimal movePx = Math.Clamp(rawPx, -maxStep, maxStep);
+            decimal movePx = Math.Round(Math.Clamp(rawPx, 0, maxStep), 2);
             
-            if(movePx > 0) _pixels["longX"] += movePx;
-            if (movePx < 0) _pixels["shortX"] += Math.Abs(movePx);
+            if(priceDelta > 0) _pixels["longX"] += movePx;
+            if (priceDelta < 0) _pixels["shortX"] += movePx;
             
             await _hub.Clients.All.SendAsync("RaceTick", new
             {
