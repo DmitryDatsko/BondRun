@@ -43,13 +43,13 @@ public class BettingService : BackgroundService
                 }
                 break;
             case "long":
-                if (_pixels["long"] < _pixels["shortX"])
+                if (_pixels["longX"] < _pixels["shortX"])
                 {
-                    _pixels["long"] = Math.Clamp(_pixels["shortX"] + 5m, 0m, (decimal)TotalPixels);
+                    _pixels["longX"] = Math.Clamp(_pixels["shortX"] + 5m, 0m, (decimal)TotalPixels);
                 }
                 break;
             case "short":
-                if (_pixels["long"] > _pixels["shortX"])
+                if (_pixels["longX"] > _pixels["shortX"])
                 {
                     _pixels["shortX"] = Math.Clamp(_pixels["longX"] + 5m, 0m, (decimal)TotalPixels);
                 }
@@ -180,8 +180,8 @@ public class BettingService : BackgroundService
                     await Task.Delay(1, stoppingToken);
                 }
                 
-                _cryptoPriceService.OnPriceChanged -= HandlePriceChanged;
                 await timerTask;
+                _cryptoPriceService.OnPriceChanged -= HandlePriceChanged;
                 
                 string gameResult = _prices[^1] == _prices[0] ? "tie" :
                     _prices[^1] > _prices[0] ? "long" : "short";
