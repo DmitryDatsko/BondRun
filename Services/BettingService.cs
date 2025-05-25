@@ -6,7 +6,7 @@ namespace BondRun.Services;
 
 public class BettingService : BackgroundService
 {
-    private const double TotalPixels = 332.0;
+    private const double TotalPixels = 290;
     private Stopwatch _gameStopwatch;
     private double _lastElapsedSeconds;
     private readonly TimeSpan _gameDuration = TimeSpan.FromSeconds(15);
@@ -29,6 +29,32 @@ public class BettingService : BackgroundService
         _hub = hub;
         _cryptoPriceService = cryptoPriceService;
         _logger = logger;
+    }
+
+    private void NormalizeFinalPixels(string gameResult)
+    {
+        switch (gameResult)
+        {
+            case "tie":
+                if (_pixels["longX"] != _pixels["shortX"])
+                {
+                    _pixels["longX"] = Math.Max(_pixels["shortX"], _pixels["longX"]);
+                    _pixels["shortX"] = _pixels["longX"];
+                }
+                break;
+            case "long":
+                if (_pixels["long"] < _pixels["shortX"])
+                {
+                    _pixels["long"] = Math.Clamp(_pixels["shortX"] + 5m, 0m, (decimal)TotalPixels);
+                }
+                break;
+            case "short":
+                if (_pixels["long"] > _pixels["shortX"])
+                {
+                    _pixels["shortX"] = Math.Clamp(_pixels["longX"] + 5m, 0m, (decimal)TotalPixels);
+                }
+                break;
+        }
     }
     private void ClearPixelsDictionary()
     {
@@ -159,6 +185,13 @@ public class BettingService : BackgroundService
                 
                 string gameResult = _prices[^1] == _prices[0] ? "tie" :
                     _prices[^1] > _prices[0] ? "long" : "short";
+                
+                NormalizeFinalPixels(gameResult);
+                await _hub.Clients.All.SendAsync("RaceTick", new
+                {
+                    LongX  = _pixels["longX"],
+                    ShortX = _pixels["shortX"]
+                }, stoppingToken);
                 
                 IsGameStarted = false;
                 await _hub.Clients.All.SendAsync("GameResult", new
