@@ -1,6 +1,4 @@
 ﻿using System.Diagnostics;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using BondRun.Hubs;
 using Microsoft.AspNetCore.SignalR;
 
@@ -8,22 +6,12 @@ namespace BondRun.Services;
 
 public class BettingService : BackgroundService
 {
-    // for logging
-    private static readonly string _logFilePath = Path.Combine(AppContext.BaseDirectory, "game_results.jsonl");
-    private static readonly JsonSerializerOptions _jsonOpts = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = 
-            JsonIgnoreCondition.WhenWritingNull
-    };
-    
     private const double TotalPixels = 332.0;
     private Stopwatch _gameStopwatch;
     private double _lastElapsedSeconds;
     private readonly TimeSpan _gameDuration = TimeSpan.FromSeconds(15);
-    private readonly TimeSpan _betTime = TimeSpan.FromSeconds(1);
-    private readonly TimeSpan _delayAfterGame = TimeSpan.FromSeconds(1);
-    private readonly TimeSpan _totalGameTime;
+    private readonly TimeSpan _betTime = TimeSpan.FromSeconds(12);
+    private readonly TimeSpan _delayAfterGame = TimeSpan.FromSeconds(5);
     private readonly object _lock = new();
     private readonly Dictionary<string, decimal> _pixels = new()
     {
@@ -41,7 +29,6 @@ public class BettingService : BackgroundService
         _hub = hub;
         _cryptoPriceService = cryptoPriceService;
         _logger = logger;
-        _totalGameTime = _gameDuration + _betTime + _delayAfterGame;
     }
     private void ClearPixelsDictionary()
     {
@@ -52,6 +39,7 @@ public class BettingService : BackgroundService
     }
     private async Task RunCountdownAsync(Stopwatch stopwatch, double totalSeconds, string methodName, CancellationToken cancellationToken = default)
     {
+        const double eps = 0.005;
         double lastSentTime = -1;
 
         while (stopwatch.Elapsed.TotalSeconds < totalSeconds)
@@ -60,7 +48,7 @@ public class BettingService : BackgroundService
 
             double elapsed = Math.Round(stopwatch.Elapsed.TotalSeconds, 2);
 
-            if (elapsed != lastSentTime)
+            if (Math.Abs(elapsed - lastSentTime) > eps)
             {
                 lastSentTime = elapsed;
                 await _hub.Clients.All.SendAsync(methodName, elapsed, cancellationToken: cancellationToken);
@@ -71,6 +59,7 @@ public class BettingService : BackgroundService
 
         await _hub.Clients.All.SendAsync(methodName, totalSeconds, cancellationToken: cancellationToken);
     }
+    
     private void HandlePriceChanged(object? sender, decimal newPrice)
     {
         _ = CarSpeedOnPriceChange(newPrice)
@@ -79,6 +68,7 @@ public class BettingService : BackgroundService
                 if(t.Exception != null) _logger.LogCritical($"Exception in price change handler: {t.Exception}");
             }, TaskContinuationOptions.OnlyOnFaulted);
     }
+    
     private async Task CarSpeedOnPriceChange(decimal newPrice)
     {
         _prices.Add(newPrice);
@@ -107,11 +97,9 @@ public class BettingService : BackgroundService
     }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var timer = new PeriodicTimer(_totalGameTime);
-
         try
         {
-            while (await timer.WaitForNextTickAsync(stoppingToken))
+            while (!stoppingToken.IsCancellationRequested)
             {
                 lock (_lock) { IsBettingOpen = true; }
                 IsGameStarted = false;
@@ -189,23 +177,6 @@ public class BettingService : BackgroundService
                         BetResult = betResult
                     }, stoppingToken);
                 }
-                
-                // start logging
-
-                var entry = new
-                {
-                    TimeStampUtc = DateTime.UtcNow,
-                    GameResultByPrice = gameResult,
-                    LongX = _pixels["longX"],
-                    ShortX = _pixels["shortX"],
-                    GameResultByPixels = _pixels["longX"] == _pixels["shortX"] ? "tie" :
-                        _pixels["longX"] > _pixels["shortX"] ? "long" : "short"
-                };
-                
-                var jsonLine = JsonSerializer.Serialize(entry, _jsonOpts);
-                await File.AppendAllTextAsync(_logFilePath, jsonLine, stoppingToken);
-                
-                // end of logging
                 
                 ClearPixelsDictionary();
                 _prices.Clear();
