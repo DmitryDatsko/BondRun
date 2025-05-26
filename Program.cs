@@ -1,10 +1,14 @@
 using System.Text;
 using BondRun.Configuration;
+using BondRun.Filters;
 using BondRun.Hubs;
 using BondRun.Services;
+using BondRun.Services.Hub;
+using BondRun.Services.Monad;
 using BondRun.Services.Token;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.CookiePolicy;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
 
 DotNetEnv.Env.Load();
@@ -12,9 +16,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 var myAllowSpecificOrigins = "_myAllowSpecificOrigins";
 
-builder.Services.AddSignalR();
+builder.Services.AddSignalR()
+    .AddHubOptions<GameHub>(opts => opts.AddFilter<HubAuthorize>());
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<BettingService>();
+builder.Services.AddSingleton<HubAuthorize>();
 builder.Services.AddSingleton<CryptoPriceService>();
+builder.Services.AddSingleton<IUserIdentity, UserIdentity>();
+builder.Services.AddSingleton<IMonadService, MonadService>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<BettingService>());
 builder.Services.AddHostedService(provider => provider.GetRequiredService<CryptoPriceService>());
 builder.Services.AddEndpointsApiExplorer();
@@ -38,10 +47,10 @@ builder.Services.Configure<EnvVariables>(options =>
     options.RpcUrl = Environment.GetEnvironmentVariable("RPC_URL") ?? string.Empty;
     options.PrivateKey = Environment.GetEnvironmentVariable("PRIVATE_KEY") ?? string.Empty;
     options.JwtTokenSecret = Environment.GetEnvironmentVariable("JWT_TOKEN_SECRET") ?? string.Empty;
+    options.NetworkId = Environment.GetEnvironmentVariable("NETWORK_ID") ?? string.Empty;
+    options.ContractAddress = Environment.GetEnvironmentVariable("CONTRACT_ADDRESS") ?? string.Empty;
+    options.CookieName = Environment.GetEnvironmentVariable("WALLET_COOKIE_NAME") ?? string.Empty;
 });
-
-builder.Services.AddScoped<IUserIdentity, UserIdentity>();
-builder.Services.AddHostedService<BettingService>();
 
 builder.Services.AddAuthentication(options =>
 {
@@ -70,14 +79,14 @@ builder.Services.AddAuthentication(options =>
     {
         OnMessageReceived = context =>
         {
-            if (context.Request.Cookies.TryGetValue("XMN3bf8G9Vw3hSU", out var token))
+            if (context.Request.Cookies.TryGetValue(Environment.GetEnvironmentVariable("WALLET_COOKIE_NAME")!, out var token))
             {
                 context.Token = token;
             }
 
             if (string.IsNullOrEmpty(context.Token))
             {
-                context.Token = context.Request.Query["XMN3bf8G9Vw3hSU"];
+                context.Token = context.Request.Query[Environment.GetEnvironmentVariable("WALLET_COOKIE_NAME")!];
             }
             
             return Task.CompletedTask;

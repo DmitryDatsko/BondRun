@@ -5,7 +5,7 @@ using BondRun.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using Newtonsoft.Json.Linq;
 
-namespace BondRun.Services;
+namespace BondRun.Services.Hub;
 
 public class CryptoPriceService(IHubContext<GameHub> hub) : BackgroundService
 {
@@ -61,7 +61,6 @@ public class CryptoPriceService(IHubContext<GameHub> hub) : BackgroundService
                             if (decimal.TryParse(closePrice, CultureInfo.InvariantCulture, out var price))
                             {
                                 Price = price;
-                                await hub.Clients.All.SendAsync("NewPrice", price, cancellationToken: stoppingToken);
                             }
                         }
                     }

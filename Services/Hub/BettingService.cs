@@ -2,7 +2,7 @@
 using BondRun.Hubs;
 using Microsoft.AspNetCore.SignalR;
 
-namespace BondRun.Services;
+namespace BondRun.Services.Hub;
 
 public class BettingService : BackgroundService
 {
@@ -177,7 +177,7 @@ public class BettingService : BackgroundService
                         }, stoppingToken);
                     }
                     
-                    await Task.Delay(1, stoppingToken);
+                    await Task.Delay(100, stoppingToken);
                 }
                 
                 await timerTask;

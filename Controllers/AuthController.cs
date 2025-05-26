@@ -15,9 +15,9 @@ namespace BondRun.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(IOptions<EnvVariables> jwtConfig, IUserIdentity userIdentity) : ControllerBase
+public class AuthController(IOptions<EnvVariables> envVariables, IUserIdentity userIdentity) : ControllerBase
 {
-    private readonly EnvVariables _envVariables = jwtConfig.Value;
+    private readonly EnvVariables _envVariables = envVariables.Value;
 
     [HttpPost("verify")]
     public IActionResult Authenticate([FromBody] AuthenticationRequest request)
@@ -53,7 +53,7 @@ public class AuthController(IOptions<EnvVariables> jwtConfig, IUserIdentity user
     [Authorize]
     public IActionResult Me()
     {
-        var address = userIdentity.GetAddressByCookie(Request);
+        var address = userIdentity.GetAddressByCookie();
         
         return string.IsNullOrEmpty(address) 
             ? Unauthorized() 
@@ -91,9 +91,9 @@ public class AuthController(IOptions<EnvVariables> jwtConfig, IUserIdentity user
         return jwt;
     }
     
-    private static void SetCookie(string accessToken, HttpContext httpContext)
+    private void SetCookie(string accessToken, HttpContext httpContext)
     {
-        httpContext.Response.Cookies.Append("XMN3bf8G9Vw3hSU", accessToken,
+        httpContext.Response.Cookies.Append(_envVariables.CookieName, accessToken,
             new CookieOptions
             {
                 Path = "/",
@@ -103,7 +103,7 @@ public class AuthController(IOptions<EnvVariables> jwtConfig, IUserIdentity user
                 Expires = DateTime.UtcNow.AddDays(1)
             });
     }
-    private static void RemoveCookie(HttpContext httpContext)
+    private void RemoveCookie(HttpContext httpContext)
     {
         var deleteOptions = new CookieOptions
         {
@@ -114,7 +114,7 @@ public class AuthController(IOptions<EnvVariables> jwtConfig, IUserIdentity user
             Expires = DateTimeOffset.UnixEpoch
         };
 
-        httpContext.Response.Cookies.Delete("XMN3bf8G9Vw3hSU", deleteOptions);
+        httpContext.Response.Cookies.Delete(_envVariables.CookieName, deleteOptions);
     }
     private static string GenerateSecureNonce(int length = 64)
     {
