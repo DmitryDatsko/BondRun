@@ -31,7 +31,7 @@ public class AuthController(IOptions<EnvVariables> envVariables, IUserIdentity u
 
         if (!string.IsNullOrEmpty(recoveredAddress))
         {
-            var accessToken = CreateToken(new User { Id = Guid.NewGuid(), Address = recoveredAddress });
+            var accessToken = CreateToken(recoveredAddress);
             
             if (!string.IsNullOrEmpty(accessToken))
             {
@@ -68,12 +68,16 @@ public class AuthController(IOptions<EnvVariables> envVariables, IUserIdentity u
 
         return Unauthorized();
     }
-    private string CreateToken(User user)
+    private string CreateToken(string address)
     {
+        var unixIat = new DateTimeOffset(DateTime.UtcNow)
+            .ToUnixTimeSeconds().ToString();
+        
         var claims = new List<Claim>
         {
-            new (ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new ("wallet_address", user.Address)
+            new(JwtRegisteredClaimNames.Sub, address),
+            new("address", address),
+            new(JwtRegisteredClaimNames.Iat, unixIat, ClaimValueTypes.Integer64)
         };
         
         var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(_envVariables.JwtTokenSecret));
