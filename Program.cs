@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.CookiePolicy;
 using Microsoft.IdentityModel.Tokens;
 
+DotNetEnv.Env.Load();
 var builder = WebApplication.CreateBuilder(args);
 
 var myAllowSpecificOrigins = "_myAllowSpecificOrigins";
@@ -32,7 +33,12 @@ builder.Services.AddCors(options =>
         });
 });
 
-builder.Services.Configure<JwtConfig>(builder.Configuration.GetSection(JwtConfig.SectionName));
+builder.Services.Configure<EnvVariables>(options =>
+{
+    options.RpcUrl = Environment.GetEnvironmentVariable("RPC_URL") ?? string.Empty;
+    options.PrivateKey = Environment.GetEnvironmentVariable("PRIVATE_KEY") ?? string.Empty;
+    options.JwtTokenSecret = Environment.GetEnvironmentVariable("JWT_TOKEN_SECRET") ?? string.Empty;
+});
 
 builder.Services.AddScoped<IUserIdentity, UserIdentity>();
 builder.Services.AddHostedService<BettingService>();
@@ -53,8 +59,11 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = false,
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII
-            .GetBytes(builder.Configuration.GetSection("JwtConfiguration:AccessTokenSecret").Value!))
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.ASCII.GetBytes(
+                Environment.GetEnvironmentVariable("JWT_TOKEN_SECRET")!
+            )
+        )
     };
 
     options.Events = new JwtBearerEvents

@@ -1,7 +1,8 @@
 ﻿namespace BondRun.Configuration;
 
-public class JwtConfig
+public class EnvVariables
 {
-    public const string SectionName = "JwtConfiguration";
-    public string AccessTokenSecret { get; set; } = string.Empty;
+    public string RpcUrl { get; set; } = string.Empty;
+    public string PrivateKey { get; set; } = string.Empty;
+    public string JwtTokenSecret { get; set; } = string.Empty;
 }

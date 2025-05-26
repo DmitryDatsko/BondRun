@@ -6,7 +6,6 @@ using BondRun.Configuration;
 using BondRun.Models;
 using BondRun.Services.Token;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.CookiePolicy;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -16,9 +15,9 @@ namespace BondRun.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIdentity) : ControllerBase
+public class AuthController(IOptions<EnvVariables> jwtConfig, IUserIdentity userIdentity) : ControllerBase
 {
-    private readonly JwtConfig _jwtConfig = jwtConfig.Value;
+    private readonly EnvVariables _envVariables = jwtConfig.Value;
 
     [HttpPost("verify")]
     public IActionResult Authenticate([FromBody] AuthenticationRequest request)
@@ -77,7 +76,7 @@ public class AuthController(IOptions<JwtConfig> jwtConfig, IUserIdentity userIde
             new ("wallet_address", user.Address)
         };
         
-        var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(_jwtConfig.AccessTokenSecret));
+        var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(_envVariables.JwtTokenSecret));
         
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
 
