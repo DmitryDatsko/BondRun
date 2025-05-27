@@ -1,4 +1,4 @@
-﻿namespace BondRun.Models;
+﻿namespace BondRun.Models.DTO;
 
 public class AuthenticationRequest
 {

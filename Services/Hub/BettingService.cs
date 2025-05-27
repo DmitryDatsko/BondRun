@@ -1,36 +1,76 @@
 ﻿using System.Diagnostics;
+using BondRun.Data;
 using BondRun.Hubs;
+using BondRun.Models;
+using BondRun.Models.DTO;
+using BondRun.Services.Monad;
+using BondRun.Services.Token;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using NBitcoin.Secp256k1;
 
 namespace BondRun.Services.Hub;
 
 public class BettingService : BackgroundService
 {
     private const double TotalPixels = 290;
+    private const decimal Margin = 0.05m;
+    private readonly IDbContextFactory<ApiDbContext> _dbFactory;
     private Stopwatch _gameStopwatch;
     private double _lastElapsedSeconds;
     private readonly TimeSpan _gameDuration = TimeSpan.FromSeconds(15);
     private readonly TimeSpan _betTime = TimeSpan.FromSeconds(12);
     private readonly TimeSpan _delayAfterGame = TimeSpan.FromSeconds(5);
     private readonly object _lock = new();
+    private bool IsBettingOpen { get; set; }
+    private bool IsGameStarted { get; set; }
+    private Guid GameId { get; set; }
     private readonly Dictionary<string, decimal> _pixels = new()
     {
         { "longX", 0m}, 
         { "shortX", 0m} 
     };
     private readonly List<decimal> _prices = new();
+    private readonly Dictionary<Bet, decimal> _payouts = new();
     private readonly IHubContext<GameHub> _hub;
     private readonly CryptoPriceService _cryptoPriceService;
     private readonly ILogger<BettingService> _logger;
-    public bool IsBettingOpen { get; private set; }
-    public bool IsGameStarted { get; private set; }
-    public BettingService(IHubContext<GameHub> hub, CryptoPriceService cryptoPriceService, ILogger<BettingService> logger)
+    private readonly IMonadService _monadService;
+    public BettingService(IHubContext<GameHub> hub,
+        CryptoPriceService cryptoPriceService, 
+        ILogger<BettingService> logger,
+        IDbContextFactory<ApiDbContext> dbFactory,
+        IMonadService monadService)
     {
         _hub = hub;
         _cryptoPriceService = cryptoPriceService;
         _logger = logger;
+        _dbFactory = dbFactory;
+        _monadService = monadService;
     }
 
+    private void UpdateState(bool openBetting, bool gameStarted, Guid gameId)
+    {
+        lock (_lock)
+        {
+            IsBettingOpen = openBetting;
+            IsGameStarted = gameStarted;
+            GameId = gameId;
+        }
+    }
+
+    public BettingState ReadState()
+    {
+        lock (_lock)
+        {
+            return new BettingState
+            {
+                IsBettingOpen = IsBettingOpen,
+                IsGameStarted = IsGameStarted,
+                GameId = GameId
+            };
+        }
+    }
     private void NormalizeFinalPixels(string gameResult)
     {
         switch (gameResult)
@@ -56,6 +96,38 @@ public class BettingService : BackgroundService
                 break;
         }
     }
+
+    private async Task PayoutCalculator(decimal totalPool, List<Bet> winningBets)
+    {
+        if (totalPool <= 0 || !winningBets.Any())
+            return;
+        
+        var totalWinningStake = winningBets.Sum(b => b.Amount);
+        
+        var loserPool = totalPool - totalWinningStake;
+        var poolForWinners = loserPool * (1 - Margin);
+
+        foreach (var bet in winningBets)
+        {
+            decimal payout = bet.Amount;
+            
+            if (poolForWinners > 0 && totalWinningStake > 0)
+            {
+                var share = (payout / totalWinningStake) * poolForWinners;
+                payout += share;
+            }
+            _payouts[bet] = payout;
+        }
+        
+        await _monadService.AddWinnersBalance(_payouts);
+
+        foreach (var payout in _payouts)
+        {
+            await _hub.Clients.User(payout.Key.UserAddress)
+                .SendAsync("Payout", new { PayoutAmount = payout.Value });
+        }
+    }
+    
     private void ClearPixelsDictionary()
     {
         foreach (var key in _pixels.Keys)
@@ -127,23 +199,27 @@ public class BettingService : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                lock (_lock) { IsBettingOpen = true; }
-                IsGameStarted = false;
-                await _hub.Clients.All.SendAsync("BettingState", new {
-                    IsBettingOpen,
-                    IsGameStarted
-                }, cancellationToken: stoppingToken);
+                await using var db = await _dbFactory.CreateDbContextAsync(stoppingToken);
+                UpdateState(true, false, Guid.CreateVersion7());
+                
+                await db.Games.AddAsync(new Game
+                {
+                    Id = GameId
+                }, stoppingToken);
+                await db.SaveChangesAsync(stoppingToken);
+                
+                await _hub.Clients.All.SendAsync("BettingState", 
+                    ReadState(),
+                    cancellationToken: stoppingToken);
                 
                 var betStopwatch = Stopwatch.StartNew();
                 await RunCountdownAsync(betStopwatch, _betTime.TotalSeconds, "Timer", cancellationToken: stoppingToken);
-
-                lock (_lock) { IsBettingOpen = false; }
-                IsGameStarted = true;
-                await _hub.Clients.All.SendAsync("BettingState", new
-                {
-                    IsBettingOpen,
-                    IsGameStarted
-                },cancellationToken: stoppingToken);
+                
+                UpdateState(false, true, GameId);
+                
+                await _hub.Clients.All.SendAsync("BettingState", 
+                    ReadState(),
+                    cancellationToken: stoppingToken);
                 
                 _gameStopwatch = Stopwatch.StartNew();
                 _lastElapsedSeconds = 0.0;
@@ -164,8 +240,8 @@ public class BettingService : BackgroundService
                     {
                         do
                         {
-                            _pixels["longX"] += 0.25m;
-                            _pixels["shortX"] += 0.25m;
+                            _pixels["longX"] += 0.15m;
+                            _pixels["shortX"] += 0.15m;
                             nextTickMs += frameIntervalMs;
                         }
                         while (elapsedMs >= nextTickMs);
@@ -193,26 +269,32 @@ public class BettingService : BackgroundService
                     ShortX = _pixels["shortX"]
                 }, stoppingToken);
                 
-                IsGameStarted = false;
+                UpdateState(true, false, GameId);
+                var state = ReadState();
+                
                 await _hub.Clients.All.SendAsync("GameResult", new
                 {
                     gameResult,
-                    IsBettingOpen,
-                    IsGameStarted    
+                    state.IsBettingOpen,
+                    state.IsGameStarted,
+                    state.GameId
                 }, stoppingToken);
 
-                foreach (var bet in GameHub.GetAllBetsAndClear())
-                {
-                    string betResult = gameResult == bet.Side ? "win" : "lose";
-                    
-                    await _hub.Clients.Client(bet.ConnectionId).SendAsync("BetResult", new
-                    {
-                        BetResult = betResult
-                    }, stoppingToken);
-                }
+                var winningBets = await db.Bets
+                    .AsNoTracking()
+                    .Where(b => b.GameId == GameId &&
+                                b.Side == gameResult)
+                    .ToListAsync(stoppingToken);
+                
+                var totalPool = await db.Bets.AsNoTracking()
+                    .Where(b => b.GameId == GameId)
+                    .SumAsync(b => b.Amount, stoppingToken);
+                
+                await PayoutCalculator(totalPool, winningBets);
                 
                 ClearPixelsDictionary();
                 _prices.Clear();
+                _payouts.Clear();
                 await Task.Delay(_delayAfterGame, stoppingToken);
             }
         }

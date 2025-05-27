@@ -1,8 +1,11 @@
-﻿using BondRun.Models.DTO;
+﻿using BondRun.Models;
+using BondRun.Models.DTO;
+using Nethereum.RPC.Eth.DTOs;
 
 namespace BondRun.Services.Monad;
 
 public interface IMonadService
 {
-    Task<bool> VerifyTransactionAsync(TransactionRequest request, CancellationToken cancellationToken = default);
+    Task<TransactionReceipt?> VerifyTransactionAsync(TransactionRequest request, CancellationToken cancellationToken = default);
+    Task AddWinnersBalance(Dictionary<Bet, decimal> payouts, CancellationToken cancellationToken = default);
 }

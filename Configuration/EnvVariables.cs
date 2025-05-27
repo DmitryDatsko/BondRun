@@ -8,4 +8,5 @@ public class EnvVariables
     public string NetworkId { get; set; } = string.Empty;
     public string ContractAddress { get; set; } = string.Empty;
     public string CookieName { get; set; } = string.Empty;
+    public string PostgresConnectionString { get; set; } = string.Empty;
 }

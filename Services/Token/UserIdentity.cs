@@ -25,7 +25,7 @@ public class UserIdentity(IHttpContextAccessor accessor, IOptions<EnvVariables> 
         try
         {
             var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
-            return jwt.Claims.FirstOrDefault(c => c.Type == "wallet_address")?.Value
+            return jwt.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value
                    ?? string.Empty;
         }
         catch

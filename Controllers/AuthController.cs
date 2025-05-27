@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using BondRun.Configuration;
 using BondRun.Models;
+using BondRun.Models.DTO;
 using BondRun.Services.Token;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,12 +23,9 @@ public class AuthController(IOptions<EnvVariables> envVariables, IUserIdentity u
     [HttpPost("verify")]
     public IActionResult Authenticate([FromBody] AuthenticationRequest request)
     {
-        var message = request.Message;
-        var signature = request.Signature;
-
         var signer = new EthereumMessageSigner();
         
-        var recoveredAddress = signer.EncodeUTF8AndEcRecover(message, signature);
+        var recoveredAddress = signer.EncodeUTF8AndEcRecover(request.Message, request.Signature);
 
         if (!string.IsNullOrEmpty(recoveredAddress))
         {
