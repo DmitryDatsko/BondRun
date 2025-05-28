@@ -23,19 +23,19 @@ public sealed class GameHub(BettingService bettingService,
     }
 
     public async Task PlaceBet(
-        //Guid gameId,
+        Guid gameId,
         decimal amount,
         string side,
         string txHash)
     {
         var gameState = bettingService.ReadState();
         
-        /*if (gameId != gameState.GameId)
+        if (gameId != gameState.GameId)
         {
             await Clients.User(Context.UserIdentifier ?? string.Empty)
                 .SendAsync("BetRejected", "This game has already finished.");
             return;
-        }*/
+        }
         
         if (!gameState.IsBettingOpen || side is not ("long" or "short" or "tie"))
         {
