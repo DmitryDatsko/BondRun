@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using BondRun.Configuration;
 using BondRun.Data;
+using BondRun.DbInitializer;
 using BondRun.Filters;
 using BondRun.Hubs;
 using BondRun.Services;
@@ -29,6 +30,7 @@ builder.Services.AddSingleton<HubAuthorize>();
 builder.Services.AddSingleton<CryptoPriceService>();
 builder.Services.AddSingleton<IUserIdentity, UserIdentity>();
 builder.Services.AddSingleton<IMonadService, MonadService>();
+builder.Services.AddScoped<IDbInitializer, DbInitializer>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<CryptoPriceService>());
 builder.Services.AddHostedService(provider => provider.GetRequiredService<BettingService>());
 builder.Services.AddEndpointsApiExplorer();
@@ -102,6 +104,7 @@ builder.Services.AddAuthentication(options =>
 });
 
 var app = builder.Build();
+SeedDatabase();
 
 if (app.Environment.IsDevelopment())
 {
@@ -126,3 +129,11 @@ app.MapHub<GameHub>("/gamehub");
 app.UseHttpsRedirection();
 
 app.Run();
+
+
+void SeedDatabase()
+{
+    using var scope = app.Services.CreateScope();
+    var dbInitializer = scope.ServiceProvider.GetRequiredService<IDbInitializer>();
+    dbInitializer.Initialize();
+}
