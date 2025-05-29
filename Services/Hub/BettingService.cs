@@ -13,7 +13,7 @@ namespace BondRun.Services.Hub;
 
 public class BettingService : BackgroundService
 {
-    private const double TotalPixels = 290;
+    private const double TotalPixels = 280;
     private const decimal Margin = 0.05m;
     private readonly IDbContextFactory<ApiDbContext> _dbFactory;
     private Stopwatch _gameStopwatch;
@@ -118,14 +118,8 @@ public class BettingService : BackgroundService
             }
             _payouts[bet] = payout;
         }
-        
-        await _monadService.AddWinnersBalance(_payouts);
 
-        foreach (var payout in _payouts)
-        {
-            await _hub.Clients.User(payout.Key.UserAddress)
-                .SendAsync("Payout", new { PayoutAmount = payout.Value });
-        }
+        await _monadService.AddWinnersBalance(_payouts);
     }
     
     private void ClearPixelsDictionary()
@@ -135,6 +129,7 @@ public class BettingService : BackgroundService
             _pixels[key] = 0m;
         }
     }
+    
     private async Task RunCountdownAsync(Stopwatch stopwatch, double totalSeconds, string methodName, CancellationToken cancellationToken = default)
     {
         const double eps = 0.005;
@@ -273,12 +268,24 @@ public class BettingService : BackgroundService
                 UpdateState(false, false, GameId);
                 var state = ReadState();
                 
+                var bets = await db.Bets
+                    .AsNoTracking()
+                    .Where(bet => bet.GameId == GameId)
+                    .Select(b => new BetDto
+                    {
+                        Amount = b.Amount,
+                        Side = b.Side,
+                        UserAddress = b.UserAddress
+                    })
+                    .ToListAsync(stoppingToken);
+                
                 await _hub.Clients.All.SendAsync("GameResult", new
                 {
                     gameResult,
                     state.IsBettingOpen,
                     state.IsGameStarted,
-                    state.GameId
+                    state.GameId,
+                    bets
                 }, stoppingToken);
 
                 var winningBets = await db.Bets

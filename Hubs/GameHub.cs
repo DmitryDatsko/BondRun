@@ -1,5 +1,4 @@
-﻿using System.Collections.Concurrent;
-using BondRun.Data;
+﻿using BondRun.Data;
 using BondRun.Models;
 using BondRun.Models.DTO;
 using BondRun.Services.Hub;
@@ -15,13 +14,13 @@ public sealed class GameHub(BettingService bettingService,
     IUserIdentity userIdentity,
     IDbContextFactory<ApiDbContext> dbContextFactory) : Hub
 {
+    private Dictionary<string, decimal> _bets = new();
     public override async Task OnConnectedAsync()
     {
         await Clients.Caller.SendAsync("OnConnected", bettingService.ReadState());
         
         await base.OnConnectedAsync();
     }
-
     public async Task PlaceBet(
         Guid gameId,
         decimal amount,
@@ -74,8 +73,17 @@ public sealed class GameHub(BettingService bettingService,
             UserAddress = userAddress,
             GameId = gameState.GameId
         });
+        
         await db.SaveChangesAsync();
-
+        
         await Clients.User(Context.UserIdentifier ?? string.Empty).SendAsync("BetAccepted");
+        
+        _bets.Add(userAddress, amount);
+        
+        await Clients.All.SendAsync("Bets", new
+        {
+            _bets,
+            bank = _bets.Sum(b => b.Value)
+        });
     }
 }
