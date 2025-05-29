@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BondRun.Migrations
 {
     [DbContext(typeof(ApiDbContext))]
-    [Migration("20250529172613_initial-migrations")]
+    [Migration("20250529201141_initial-migrations")]
     partial class initialmigrations
     {
         /// <inheritdoc />
@@ -39,11 +39,13 @@ namespace BondRun.Migrations
 
                     b.Property<string>("Side")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
 
                     b.Property<string>("UserAddress")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.HasKey("Id");
 

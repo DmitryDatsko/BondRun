@@ -30,8 +30,8 @@ namespace BondRun.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     Amount = table.Column<decimal>(type: "numeric", nullable: false),
-                    Side = table.Column<string>(type: "text", nullable: false),
-                    UserAddress = table.Column<string>(type: "text", nullable: false),
+                    Side = table.Column<string>(type: "character varying(12)", maxLength: 12, nullable: false),
+                    UserAddress = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     GameId = table.Column<Guid>(type: "uuid", nullable: false)
                 },
                 constraints: table =>
