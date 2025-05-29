@@ -196,12 +196,14 @@ public class BettingService : BackgroundService
             {
                 await using var db = await _dbFactory.CreateDbContextAsync(stoppingToken);
                 UpdateState(true, false, Guid.CreateVersion7());
-                
-                await db.Games.AddAsync(new Game
+
+                var newGame = new Game
                 {
                     Id = GameId,
                     PlayedAt = DateTime.UtcNow
-                }, stoppingToken);
+                };
+                
+                await db.Games.AddAsync(newGame, stoppingToken);
                 await db.SaveChangesAsync(stoppingToken);
                 
                 await _hub.Clients.All.SendAsync("BettingState", 
@@ -257,6 +259,9 @@ public class BettingService : BackgroundService
                 
                 string gameResult = _prices[^1] == _prices[0] ? "tie" :
                     _prices[^1] > _prices[0] ? "long" : "short";
+                
+                newGame.WinningSide = gameResult;
+                await db.SaveChangesAsync(stoppingToken);
                 
                 NormalizeFinalPixels(gameResult);
                 await _hub.Clients.All.SendAsync("RaceTick", new
