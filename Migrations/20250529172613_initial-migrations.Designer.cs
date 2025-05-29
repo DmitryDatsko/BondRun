@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BondRun.Migrations
 {
     [DbContext(typeof(ApiDbContext))]
-    [Migration("20250528145838_initial-migrations")]
+    [Migration("20250529172613_initial-migrations")]
     partial class initialmigrations
     {
         /// <inheritdoc />
@@ -58,9 +58,13 @@ namespace BondRun.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime>("PlayedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("WinningSide")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.HasKey("Id");
 

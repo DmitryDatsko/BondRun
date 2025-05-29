@@ -204,7 +204,8 @@ public class BettingService : BackgroundService
                 
                 await db.Games.AddAsync(new Game
                 {
-                    Id = GameId
+                    Id = GameId,
+                    PlayedAt = DateTime.UtcNow
                 }, stoppingToken);
                 await db.SaveChangesAsync(stoppingToken);
                 
@@ -269,7 +270,7 @@ public class BettingService : BackgroundService
                     ShortX = _pixels["shortX"]
                 }, stoppingToken);
                 
-                UpdateState(true, false, GameId);
+                UpdateState(false, false, GameId);
                 var state = ReadState();
                 
                 await _hub.Clients.All.SendAsync("GameResult", new

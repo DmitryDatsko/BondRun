@@ -16,7 +16,8 @@ namespace BondRun.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    WinningSide = table.Column<string>(type: "text", nullable: false)
+                    WinningSide = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    PlayedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
