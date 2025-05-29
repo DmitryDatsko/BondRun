@@ -201,6 +201,7 @@ public class BettingService : BackgroundService
                 {
                     Id = GameId,
                     PlayedAt = DateTime.UtcNow,
+                    WinningSide = string.Empty
                 };
                 
                 await db.Games.AddAsync(newGame, stoppingToken);
@@ -261,7 +262,6 @@ public class BettingService : BackgroundService
                     _prices[^1] > _prices[0] ? "long" : "short";
                 
                 newGame.WinningSide = gameResult;
-                db.Games.Update(newGame);
                 await db.SaveChangesAsync(stoppingToken);
                 
                 NormalizeFinalPixels(gameResult);
