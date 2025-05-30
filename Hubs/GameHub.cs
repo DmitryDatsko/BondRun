@@ -2,6 +2,7 @@
 using BondRun.Models;
 using BondRun.Models.DTO;
 using BondRun.Services.Hub;
+using BondRun.Services.Id;
 using BondRun.Services.Monad;
 using BondRun.Services.Token;
 using Microsoft.AspNetCore.SignalR;
@@ -67,7 +68,7 @@ public sealed class GameHub(BettingService bettingService,
 
         await db.Bets.AddAsync(new Bet
         {
-            Id = Guid.CreateVersion7(),
+            Id = NewGuidVersion.CreateVersion7(),
             Amount = amount,
             Side = side,
             UserAddress = userAddress,

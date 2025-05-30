@@ -3,6 +3,7 @@ using BondRun.Data;
 using BondRun.Hubs;
 using BondRun.Models;
 using BondRun.Models.DTO;
+using BondRun.Services.Id;
 using BondRun.Services.Logging;
 using BondRun.Services.Monad;
 using Microsoft.AspNetCore.SignalR;
@@ -197,7 +198,7 @@ public class BettingService : BackgroundService
             while (!stoppingToken.IsCancellationRequested)
             {
                 await using var db = await _dbFactory.CreateDbContextAsync(stoppingToken);
-                UpdateState(true, false, Guid.CreateVersion7());
+                UpdateState(true, false, NewGuidVersion.CreateVersion7());
                 
                 var newGame = new Game
                 {
