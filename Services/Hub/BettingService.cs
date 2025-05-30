@@ -4,6 +4,7 @@ using BondRun.Hubs;
 using BondRun.Models;
 using BondRun.Models.DTO;
 using BondRun.Services.Id;
+using BondRun.Services.Logging;
 using BondRun.Services.Monad;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +13,7 @@ namespace BondRun.Services.Hub;
 
 public class BettingService : BackgroundService
 {
+    private readonly LoggingGameState _loggingState = new();
     private const double TotalPixels = 280;
     private const decimal Margin = 0.05m;
     private readonly IDbContextFactory<ApiDbContext> _dbFactory;
@@ -306,6 +308,13 @@ public class BettingService : BackgroundService
                     .SumAsync(b => b.Amount, stoppingToken);
                 
                 await PayoutCalculator(totalPool, winningBets);
+                
+                string gameResultByPixels = _pixels["longX"] == _pixels["shortX"] ? "tie" :
+                    _pixels["longX"] > _pixels["shortX"] ? "long" : "short";
+                
+                _loggingState.Append(
+                    new { CreatedAt = DateTime.UtcNow, newGame.Id, actualResult = gameResultByPixels,
+                        gameResultByPixels, longX = _pixels["longX"], shortX = _pixels["shortX"] });
                 
                 ClearPixelsDictionary();
                 _prices.Clear();
