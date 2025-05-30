@@ -83,15 +83,17 @@ public class BettingService : BackgroundService
                 }
                 break;
             case "long":
-                if (_pixels["longX"] < _pixels["shortX"])
+                if (_pixels["longX"] <= _pixels["shortX"])
                 {
-                    _pixels["longX"] = Math.Clamp(_pixels["shortX"] + 20m, 0m, (decimal)TotalPixels);
+                    //_pixels["longX"] = Math.Clamp(_pixels["shortX"] + 20m, 0m, (decimal)TotalPixels);
+                    _pixels["longX"] = Math.Clamp(_pixels["longX"], _pixels["shortX"] + 20, (decimal)TotalPixels);
                 }
                 break;
             case "short":
-                if (_pixels["longX"] > _pixels["shortX"])
+                if (_pixels["longX"] >= _pixels["shortX"])
                 {
-                    _pixels["shortX"] = Math.Clamp(_pixels["longX"] + 20m, 0m, (decimal)TotalPixels);
+                    //_pixels["shortX"] = Math.Clamp(_pixels["longX"] + 20m, 0m, (decimal)TotalPixels);
+                    _pixels["shortX"] = Math.Clamp(_pixels["shortX"], _pixels["longX"] + 20, (decimal)TotalPixels);
                 }
                 break;
         }
