@@ -15,7 +15,7 @@ public sealed class GameHub(BettingService bettingService,
     IUserIdentity userIdentity,
     IDbContextFactory<ApiDbContext> dbContextFactory) : Hub
 {
-    private Dictionary<string, decimal> _bets = new();
+    private readonly Dictionary<string, decimal> _bets = new();
     public override async Task OnConnectedAsync()
     {
         await Clients.Caller.SendAsync("OnConnected", bettingService.ReadState());
@@ -83,7 +83,7 @@ public sealed class GameHub(BettingService bettingService,
         
         await Clients.All.SendAsync("Bets", new
         {
-            _bets,
+            bets = _bets,
             bank = _bets.Sum(b => b.Value)
         });
     }
