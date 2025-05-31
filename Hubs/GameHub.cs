@@ -19,7 +19,6 @@ public sealed class GameHub(BettingService bettingService,
     public override async Task OnConnectedAsync()
     {
         await Clients.Caller.SendAsync("OnConnected", bettingService.ReadState());
-        
         await base.OnConnectedAsync();
     }
     public async Task PlaceBet(
