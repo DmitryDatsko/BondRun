@@ -283,13 +283,12 @@ public class BettingService : BackgroundService
                         UserAddress = b.UserAddress
                     })
                     .ToListAsync(stoppingToken);
-                
+
                 await _hub.Clients.All.SendAsync("GameResult", new
                 {
                     gameResult,
                     state.IsBettingOpen,
                     state.IsGameStarted,
-                    state.GameId,
                     bets
                 }, stoppingToken);
 
