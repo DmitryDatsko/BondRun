@@ -279,7 +279,7 @@ public class BettingService : BackgroundService
                     .Select(b => new BetDto
                     {
                         Amount = b.Amount,
-                        Side = b.Side,
+                        IsWinner = b.Side == gameResult,
                         UserAddress = b.UserAddress
                     })
                     .ToListAsync(stoppingToken);
