@@ -1,3 +1,7 @@
-﻿.env merge=ours
-git-crypt/ merge=ours
-.gitattributes merge=ours
+﻿# for main branch
+.env    merge=ours
+.git-crypt/ merge=ours
+.gitattributes  merge=ours
+
+# for dev branch
+.env    filter=git-crypt diff=git-crypt merge=ours
