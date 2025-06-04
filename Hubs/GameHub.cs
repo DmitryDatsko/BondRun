@@ -38,7 +38,8 @@ public sealed class GameHub(BettingService bettingService,
         
         if (side is not ("long" or "short" or "tie"))
         {
-            await Clients.User(Context.UserIdentifier ?? string.Empty).SendAsync("BetRejected", "Bets are closed now");
+            await Clients.User(Context.UserIdentifier ?? string.Empty)
+                .SendAsync("BetRejected", "Bets are closed now");
             return;
         }
 

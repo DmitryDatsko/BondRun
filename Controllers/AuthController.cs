@@ -3,7 +3,6 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using BondRun.Configuration;
-using BondRun.Models;
 using BondRun.Models.DTO;
 using BondRun.Services.Token;
 using Microsoft.AspNetCore.Authorization;

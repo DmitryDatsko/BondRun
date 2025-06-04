@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 
 namespace BondRun.Services.Hub;
 
-public class CryptoPriceService(IHubContext<GameHub> hub) : BackgroundService
+public class CryptoPriceService : BackgroundService
 {
     private readonly ClientWebSocket _client = new();
     private static readonly Uri Uri = new("wss://stream.bybit.com/v5/public/spot");
